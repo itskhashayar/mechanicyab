@@ -15,12 +15,14 @@ final class SchemaManagerTest extends TestCase
         $tables = $schema->tableNames('custom_');
         self::assertSame('custom_my_users', $tables['users']);
         self::assertSame('custom_my_module_states', $tables['module_states']);
-        self::assertCount(8, $tables);
+        self::assertSame('custom_my_locations', $tables['locations']);
+        self::assertSame('custom_my_vehicle_trims', $tables['vehicle_trims']);
+        self::assertCount(14, $tables);
     }
 
     public function testPendingMigrationIsReportedWithoutWordPressRuntime(): void
     {
         $schema = new SchemaManager();
-        self::assertSame(['stage-2-core-schema-v1'], $schema->pendingMigrations());
+        self::assertSame(['stage-2-core-schema-v1', 'stage-3-reference-schema-v2'], $schema->pendingMigrations());
     }
 }
