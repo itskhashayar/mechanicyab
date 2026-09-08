@@ -107,8 +107,8 @@ final class Plugin
                 try {
                     $id = $service->create((array) $request->get_json_params(), (int) get_current_user_id());
                     return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
-                } catch (\Throwable $exception) {
-                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'mechanic_create_failed', 'message' => $exception->getMessage()]]))->toArray(), 422);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'mechanic_create_failed']]))->toArray(), 422);
                 }
             },
         ]);

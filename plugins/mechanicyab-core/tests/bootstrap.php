@@ -19,4 +19,6 @@ require_once dirname(__DIR__) . '/src/Core/MechanicService.php';
 require_once dirname(__DIR__) . '/src/Core/HoursService.php';
 require_once dirname(__DIR__) . '/src/Core/VerificationService.php';
 require_once dirname(__DIR__) . '/src/Core/MechanicPublicResource.php';
+require_once dirname(__DIR__) . '/src/Contracts/MechanicSupportingRepository.php';
+require_once dirname(__DIR__) . '/src/Core/MechanicOperationsService.php';
 require_once dirname(__DIR__) . '/src/Modules/CoreModule.php';
