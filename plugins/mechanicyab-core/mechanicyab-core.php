@@ -14,6 +14,8 @@ namespace MechanicYab\Core;
 
 use MechanicYab\Core\Contracts\Response;
 use MechanicYab\Core\Core\Health;
+use MechanicYab\Core\Core\MechanicPublicResource;
+use MechanicYab\Core\Core\MechanicService;
 use MechanicYab\Core\Core\ModuleRegistry;
 use MechanicYab\Core\Core\SchemaManager;
 use MechanicYab\Core\Modules\CoreModule;
@@ -83,6 +85,32 @@ final class Plugin
                 'health' => $this->health->report(),
                 'schema' => $this->schema->healthReport(),
             ]))->toArray(),
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<slug>[a-z0-9-]+)', [
+            'methods' => 'GET',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                $service = new MechanicService(new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']));
+                try {
+                    $data = (new MechanicPublicResource())->toResponse($service->publicBySlug((string) $request['slug']));
+                    return new \WP_REST_Response((new Response(true, $data))->toArray(), 200);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'mechanic_not_found']]))->toArray(), 404);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => current_user_can('mechanicyab_manage_mechanics'),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                $service = new MechanicService(new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']));
+                try {
+                    $id = $service->create((array) $request->get_json_params(), (int) get_current_user_id());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable $exception) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'mechanic_create_failed', 'message' => $exception->getMessage()]]))->toArray(), 422);
+                }
+            },
         ]);
     }
 

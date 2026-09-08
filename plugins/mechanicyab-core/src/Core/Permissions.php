@@ -14,6 +14,8 @@ final class Permissions
         $role = get_role('administrator');
         if ($role !== null) {
             $role->add_cap('mechanicyab_view_diagnostics');
+            $role->add_cap('mechanicyab_manage_mechanics');
+            $role->add_cap('mechanicyab_verify_mechanics');
         }
     }
 
