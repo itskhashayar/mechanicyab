@@ -15,6 +15,7 @@ namespace MechanicYab\Core;
 use MechanicYab\Core\Contracts\Response;
 use MechanicYab\Core\Core\Health;
 use MechanicYab\Core\Core\ModuleRegistry;
+use MechanicYab\Core\Core\SchemaManager;
 use MechanicYab\Core\Modules\CoreModule;
 
 if (!defined('ABSPATH')) {
@@ -45,11 +46,18 @@ final class Plugin
 {
     private ModuleRegistry $registry;
     private Health $health;
+    private SchemaManager $schema;
 
     public function __construct()
     {
         $this->registry = new ModuleRegistry();
         $this->health = new Health();
+        $this->schema = new SchemaManager();
+    }
+
+    public static function activate(): void
+    {
+        (new SchemaManager())->migrate();
     }
 
     public function boot(): void
@@ -73,6 +81,7 @@ final class Plugin
                 'version' => VERSION,
                 'modules' => $this->registry->all(),
                 'health' => $this->health->report(),
+                'schema' => $this->schema->healthReport(),
             ]))->toArray(),
         ]);
     }
@@ -113,12 +122,24 @@ final class Plugin
         $payload = match ($command) {
             'status' => ['version' => VERSION, 'status' => 'active'],
             'modules:list' => $this->registry->all(),
-            'modules:health', 'health' => $this->health->report(),
+            'modules:health', 'health' => [
+                'application' => $this->health->report(),
+                'schema' => $this->schema->healthReport(),
+            ],
+            'migrate' => $this->migrateFromCli(),
             default => ['error' => 'Unknown command. Use status, modules:list, or health.'],
         };
         \WP_CLI::line((string) wp_json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
+
+    private function migrateFromCli(): array
+    {
+        $this->schema->migrate();
+        return $this->schema->healthReport();
+    }
 }
+
+register_activation_hook(__FILE__, [Plugin::class, 'activate']);
 
 add_action('plugins_loaded', static function (): void {
     (new Plugin())->boot();
