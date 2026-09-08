@@ -17,8 +17,12 @@ use MechanicYab\Core\Core\Health;
 use MechanicYab\Core\Core\MechanicPublicResource;
 use MechanicYab\Core\Core\MechanicService;
 use MechanicYab\Core\Core\ModuleRegistry;
+use MechanicYab\Core\Core\MysqlSearchProvider;
+use MechanicYab\Core\Core\OpenDirectionsAdapter;
+use MechanicYab\Core\Core\SearchService;
 use MechanicYab\Core\Core\SchemaManager;
 use MechanicYab\Core\Modules\CoreModule;
+use MechanicYab\Core\Modules\SearchModule;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -65,6 +69,7 @@ final class Plugin
     public function boot(): void
     {
         $this->registry->register(new CoreModule());
+        $this->registry->register(new SearchModule());
         $this->registry->boot();
         add_action('rest_api_init', [$this, 'registerRestRoutes']);
         add_action('admin_menu', [$this, 'registerAdminMenu']);
@@ -109,6 +114,42 @@ final class Plugin
                     return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
                 } catch (\Throwable) {
                     return new \WP_REST_Response((new Response(false, null, [], [['code' => 'mechanic_create_failed']]))->toArray(), 422);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/search', [
+            'methods' => 'GET',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                $filters = [];
+                foreach (['location_id', 'service_id', 'brand_id', 'model_id', 'trim_id', 'min_rating', 'min_price', 'max_price', 'latitude', 'longitude', 'radius_km', 'verified', 'open_now'] as $key) {
+                    if ($request->get_param($key) !== null) {
+                        $filters[$key] = $request->get_param($key);
+                    }
+                }
+                $result = (new SearchService(new MysqlSearchProvider($GLOBALS['wpdb'])))->search(
+                    (string) $request->get_param('q'),
+                    $filters,
+                    max(1, (int) $request->get_param('page')),
+                    min(100, max(1, (int) ($request->get_param('per_page') ?: 20))),
+                );
+                return new \WP_REST_Response((new Response(true, $result))->toArray(), 200);
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/map/directions', [
+            'methods' => 'GET',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $result = (new OpenDirectionsAdapter())->directions(
+                        (float) $request->get_param('from_lat'),
+                        (float) $request->get_param('from_lng'),
+                        (float) $request->get_param('to_lat'),
+                        (float) $request->get_param('to_lng'),
+                    );
+                    return new \WP_REST_Response((new Response(true, $result))->toArray(), 200);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'invalid_coordinates']]))->toArray(), 422);
                 }
             },
         ]);
