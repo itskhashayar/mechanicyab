@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+vendor/
+.phpunit.result.cache
+coverage/
+.php-cs-fixer.cache
+.idea/
+.vscode/
+node_modules/
+
+# WordPress runtime files
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
