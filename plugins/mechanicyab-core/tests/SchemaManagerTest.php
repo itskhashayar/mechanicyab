@@ -25,4 +25,17 @@ final class SchemaManagerTest extends TestCase
         $schema = new SchemaManager();
         self::assertSame(['stage-2-core-schema-v1', 'stage-3-reference-schema-v2'], $schema->pendingMigrations());
     }
+
+    public function testWordPressIsCanonicalIdentityAndMyUsersIsOnlyAnExtension(): void
+    {
+        $schema = new SchemaManager();
+        self::assertSame([
+            'canonical_table' => 'wp_users',
+            'canonical_key' => 'ID',
+            'profile_table' => 'my_users',
+            'profile_key' => 'wp_user_id',
+            'role_link_key' => 'wp_user_id',
+            'preference_key' => 'wp_user_id',
+        ], $schema->identityContract());
+    }
 }
