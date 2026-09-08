@@ -19,6 +19,7 @@ use MechanicYab\Core\Core\MechanicService;
 use MechanicYab\Core\Core\ModuleRegistry;
 use MechanicYab\Core\Core\MysqlSearchProvider;
 use MechanicYab\Core\Core\OpenDirectionsAdapter;
+use MechanicYab\Core\Core\PublicRouteResolver;
 use MechanicYab\Core\Core\SearchService;
 use MechanicYab\Core\Core\SchemaManager;
 use MechanicYab\Core\Modules\CoreModule;
@@ -53,12 +54,14 @@ final class Plugin
     private ModuleRegistry $registry;
     private Health $health;
     private SchemaManager $schema;
+    private PublicRouteResolver $routes;
 
     public function __construct()
     {
         $this->registry = new ModuleRegistry();
         $this->health = new Health();
         $this->schema = new SchemaManager();
+        $this->routes = new PublicRouteResolver();
     }
 
     public static function activate(): void
@@ -72,6 +75,7 @@ final class Plugin
         $this->registry->register(new SearchModule());
         $this->registry->boot();
         add_action('rest_api_init', [$this, 'registerRestRoutes']);
+        add_action('init', [$this->routes, 'register']);
         add_action('admin_menu', [$this, 'registerAdminMenu']);
         add_action('admin_init', [$this, 'registerSettings']);
         if (defined('WP_CLI') && WP_CLI) {

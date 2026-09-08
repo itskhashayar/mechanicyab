@@ -8,6 +8,7 @@ use MechanicYab\Core\Contracts\SearchProvider;
 use MechanicYab\Core\Contracts\SearchRequest;
 use MechanicYab\Core\Core\OpenDirectionsAdapter;
 use MechanicYab\Core\Core\OrganicRanking;
+use MechanicYab\Core\Core\PublicRouteResolver;
 use MechanicYab\Core\Core\SearchService;
 use MechanicYab\Core\Modules\SearchModule;
 use PHPUnit\Framework\TestCase;
@@ -55,6 +56,11 @@ final class SearchMapTest extends TestCase
         $metadata->validate();
         self::assertSame('search', $metadata->id);
         self::assertSame('degraded', $metadata->failurePolicy);
+    }
+
+    public function testPublicRoutesStayInCoreResolverBoundary(): void
+    {
+        self::assertSame(['search.php', 'map.php', 'single-mechanic.php'], array_values((new PublicRouteResolver())->supportedRoutes()));
     }
 }
 

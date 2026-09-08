@@ -28,4 +28,5 @@ require_once dirname(__DIR__) . '/src/Core/OrganicRanking.php';
 require_once dirname(__DIR__) . '/src/Core/SearchService.php';
 require_once dirname(__DIR__) . '/src/Core/OpenDirectionsAdapter.php';
 require_once dirname(__DIR__) . '/src/Modules/SearchModule.php';
+require_once dirname(__DIR__) . '/src/Core/PublicRouteResolver.php';
 require_once dirname(__DIR__) . '/src/Modules/CoreModule.php';
