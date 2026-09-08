@@ -16,6 +16,7 @@ final class Permissions
             $role->add_cap('mechanicyab_view_diagnostics');
             $role->add_cap('mechanicyab_manage_mechanics');
             $role->add_cap('mechanicyab_verify_mechanics');
+            $role->add_cap('mechanicyab_moderate_reviews');
         }
     }
 

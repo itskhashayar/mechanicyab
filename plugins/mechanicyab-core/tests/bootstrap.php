@@ -29,4 +29,7 @@ require_once dirname(__DIR__) . '/src/Core/SearchService.php';
 require_once dirname(__DIR__) . '/src/Core/OpenDirectionsAdapter.php';
 require_once dirname(__DIR__) . '/src/Modules/SearchModule.php';
 require_once dirname(__DIR__) . '/src/Core/PublicRouteResolver.php';
+require_once dirname(__DIR__) . '/src/Contracts/ReviewRepository.php';
+require_once dirname(__DIR__) . '/src/Core/ReviewService.php';
+require_once dirname(__DIR__) . '/src/Core/ReviewPublicResource.php';
 require_once dirname(__DIR__) . '/src/Modules/CoreModule.php';

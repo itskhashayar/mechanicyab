@@ -20,6 +20,8 @@ use MechanicYab\Core\Core\ModuleRegistry;
 use MechanicYab\Core\Core\MysqlSearchProvider;
 use MechanicYab\Core\Core\OpenDirectionsAdapter;
 use MechanicYab\Core\Core\PublicRouteResolver;
+use MechanicYab\Core\Core\ReviewPublicResource;
+use MechanicYab\Core\Core\ReviewService;
 use MechanicYab\Core\Core\SearchService;
 use MechanicYab\Core\Core\SchemaManager;
 use MechanicYab\Core\Modules\CoreModule;
@@ -154,6 +156,44 @@ final class Plugin
                     return new \WP_REST_Response((new Response(true, $result))->toArray(), 200);
                 } catch (\Throwable) {
                     return new \WP_REST_Response((new Response(false, null, [], [['code' => 'invalid_coordinates']]))->toArray(), 422);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/reviews', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $id = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb'])))->submit((array) $request->get_json_params(), (int) get_current_user_id());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_submit_failed']]))->toArray(), 422);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/reviews/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $data = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb'])))->publicById((int) $request['id']);
+                    return new \WP_REST_Response((new Response(true, $data))->toArray(), 200);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_not_found']]))->toArray(), 404);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/reviews/(?P<id>\d+)/report', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $payload = (array) $request->get_json_params();
+                    $payload['review_id'] = (int) $request['id'];
+                    $id = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb'])))->report($payload, (int) get_current_user_id());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_report_failed']]))->toArray(), 422);
                 }
             },
         ]);
