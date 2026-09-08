@@ -12,4 +12,5 @@ require_once dirname(__DIR__) . '/src/Core/ReferenceImport.php';
 require_once dirname(__DIR__) . '/src/Core/LocationTree.php';
 require_once dirname(__DIR__) . '/src/Core/ServiceCatalog.php';
 require_once dirname(__DIR__) . '/src/Core/VehicleCatalog.php';
+require_once dirname(__DIR__) . '/src/Core/MechanicProfile.php';
 require_once dirname(__DIR__) . '/src/Modules/CoreModule.php';
