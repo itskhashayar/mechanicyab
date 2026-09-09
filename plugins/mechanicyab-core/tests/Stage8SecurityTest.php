@@ -70,5 +70,9 @@ final class FakeUserRepository implements UserDataRepository
     public function favorites(int $userId): array { return []; }
     public function createVehicle(int $userId, array $data): int { return 1; }
     public function createReminder(int $userId, array $data): int { return 1; }
+    public function createServiceRecord(int $userId, array $data): int { return 1; }
+    public function serviceHistory(int $userId, int $vehicleId): array { return []; }
     public function notify(int $userId, string $type, string $title, string $body, array $data = []): int { return 1; }
+    public function notifications(int $userId): array { return []; }
+    public function markNotificationRead(int $userId, int $notificationId): bool { return true; }
 }

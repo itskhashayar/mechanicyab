@@ -27,7 +27,7 @@ Official references reviewed:
 
 Stage 8 adds schema version `6` for OTP challenges, Favorites, User Vehicles, Vehicle Service Records, Vehicle Reminders, Notifications and Notification Deliveries. It adds Auth/OTP services, provider adapters, user-owned data services and prepared persistence boundaries.
 
-Implemented REST boundaries include OTP request/verify/logout, Favorites, Vehicles and Reminders. Authenticated account actions require WordPress login. Favorite ownership and supported entity types are enforced in the application service.
+Implemented REST boundaries include OTP request/verify/logout, Favorites, Vehicles, Service History, Reminders and Notifications. Authenticated account actions require WordPress login. Favorite ownership, vehicle ownership and supported entity types are enforced in the application service.
 
 ## Threat model and controls
 
