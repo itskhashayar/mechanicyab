@@ -1,0 +1,15 @@
+parameters:
+    level: 5
+    paths:
+        - src
+        - tests
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+        - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+    excludePaths:
+        - %currentWorkingDirectory%/vendor/*
+    tmpDir: .phpstan-cache
+    ignoreErrors:
+        -
+            identifier: requireOnce.fileNotFound
+            path: src/Core/SchemaManager.php

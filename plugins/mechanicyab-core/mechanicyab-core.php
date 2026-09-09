@@ -1,0 +1,410 @@
+<?php
+/**
+ * Plugin Name: MechanicYab Core
+ * Description: Core application foundation for MechanicYab.
+ * Version: 0.1.0
+ * Requires PHP: 8.1
+ * Requires at least: 6.4
+ * Text Domain: mechanicyab
+ */
+
+declare(strict_types=1);
+
+namespace MechanicYab\Core;
+
+use MechanicYab\Core\Contracts\Response;
+use MechanicYab\Core\Core\Health;
+use MechanicYab\Core\Core\MechanicPublicResource;
+use MechanicYab\Core\Core\MechanicService;
+use MechanicYab\Core\Core\MechanicProfileService;
+use MechanicYab\Core\Core\MechanicGalleryService;
+use MechanicYab\Core\Core\ModuleRegistry;
+use MechanicYab\Core\Core\MysqlSearchProvider;
+use MechanicYab\Core\Core\OpenDirectionsAdapter;
+use MechanicYab\Core\Core\AuthService;
+use MechanicYab\Core\Core\AnalyticsService;
+use MechanicYab\Core\Core\PaymentService;
+use MechanicYab\Core\Core\ZibalPaymentGateway;
+use MechanicYab\Core\Contracts\PaymentRequest;
+use MechanicYab\Core\Core\WpdbPaymentRepository;
+use MechanicYab\Core\Core\KavenegarSmsProvider;
+use MechanicYab\Core\Core\OtpService;
+use MechanicYab\Core\Core\PublicRouteResolver;
+use MechanicYab\Core\Core\ReviewPublicResource;
+use MechanicYab\Core\Core\ReviewService;
+use MechanicYab\Core\Core\SearchService;
+use MechanicYab\Core\Core\WpdbOtpChallengeRepository;
+use MechanicYab\Core\Core\UserAccountService;
+use MechanicYab\Core\Core\WpdbUserDataRepository;
+use MechanicYab\Core\Core\WpdbAnalyticsRepository;
+use MechanicYab\Core\Core\SchemaManager;
+use MechanicYab\Core\Modules\CoreModule;
+use MechanicYab\Core\Modules\SearchModule;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+const VERSION = '0.1.0';
+const API_NAMESPACE = 'mechanicyab/v1';
+
+$autoload = __DIR__ . '/vendor/autoload.php';
+if (is_readable($autoload)) {
+    require_once $autoload;
+} else {
+    spl_autoload_register(static function (string $class): void {
+        $prefix = __NAMESPACE__ . '\\';
+        if (!str_starts_with($class, $prefix)) {
+            return;
+        }
+        $relative = str_replace('\\', '/', substr($class, strlen($prefix)));
+        $file = __DIR__ . '/src/' . $relative . '.php';
+        if (is_readable($file)) {
+            require_once $file;
+        }
+    });
+}
+
+final class Plugin
+{
+    private ModuleRegistry $registry;
+    private Health $health;
+    private SchemaManager $schema;
+    private PublicRouteResolver $routes;
+
+    public function __construct()
+    {
+        $this->registry = new ModuleRegistry();
+        $this->health = new Health();
+        $this->schema = new SchemaManager();
+        $this->routes = new PublicRouteResolver();
+    }
+
+    public static function activate(): void
+    {
+        (new SchemaManager())->migrate();
+    }
+
+    public function boot(): void
+    {
+        $this->registry->register(new CoreModule());
+        $this->registry->register(new SearchModule());
+        $this->registry->boot();
+        add_action('rest_api_init', [$this, 'registerRestRoutes']);
+        add_action('init', [$this->routes, 'register']);
+        add_action('admin_menu', [$this, 'registerAdminMenu']);
+        add_action('admin_init', [$this, 'registerSettings']);
+        if (defined('WP_CLI') && WP_CLI) {
+            \WP_CLI::add_command('mechanicyab', [$this, 'cli']);
+        }
+    }
+
+    public function registerRestRoutes(): void
+    {
+        register_rest_route(API_NAMESPACE, '/diagnostics', [
+            'methods' => 'GET',
+            'permission_callback' => static fn (): bool => current_user_can('mechanicyab_view_diagnostics'),
+            'callback' => fn (): array => (new Response(true, [
+                'version' => VERSION,
+                'modules' => $this->registry->all(),
+                'health' => $this->health->report(),
+                'schema' => $this->schema->healthReport(),
+            ]))->toArray(),
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<slug>[a-z0-9-]+)', [
+            'methods' => 'GET',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                $service = new MechanicService(new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']));
+                try {
+                    $data = (new MechanicPublicResource())->toResponse($service->publicBySlug((string) $request['slug']));
+                    return new \WP_REST_Response((new Response(true, $data))->toArray(), 200);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'mechanic_not_found']]))->toArray(), 404);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => current_user_can('mechanicyab_manage_mechanics'),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                $service = new MechanicService(new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']));
+                try {
+                    $id = $service->create((array) $request->get_json_params(), (int) get_current_user_id());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'mechanic_create_failed']]))->toArray(), 422);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles|offers|faq)', [
+            'methods' => 'GET',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $service = new MechanicProfileService(new \MechanicYab\Core\Core\WpdbMechanicSupportingRepository($GLOBALS['wpdb']), static fn (int $id): array => $mechanics->find($id) ?? []);
+                    $items = $service->list((int) $request['id'], (int) get_current_user_id(), (string) $request['collection']);
+                    return new \WP_REST_Response((new Response(true, ['items' => $items]))->toArray(), 200);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'profile_read_failed']]))->toArray(), 403); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles|offers|faq)', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $service = new MechanicProfileService(new \MechanicYab\Core\Core\WpdbMechanicSupportingRepository($GLOBALS['wpdb']), static fn (int $id): array => $mechanics->find($id) ?? []);
+                    $id = $service->save((int) $request['id'], (int) get_current_user_id(), (string) $request['collection'], (array) $request->get_json_params());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'profile_save_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles|offers|faq)/(?P<record_id>\d+)', [
+            'methods' => 'DELETE',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $service = new MechanicProfileService(new \MechanicYab\Core\Core\WpdbMechanicSupportingRepository($GLOBALS['wpdb']), static fn (int $id): array => $mechanics->find($id) ?? []);
+                    $deleted = $service->delete((int) $request['id'], (int) get_current_user_id(), (string) $request['collection'], (int) $request['record_id']);
+                    return new \WP_REST_Response((new Response(true, ['deleted' => $deleted]))->toArray(), 200);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'profile_delete_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/gallery', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $owner = static fn (int $mechanicId, int $actorId): bool => (int) (($mechanics->find($mechanicId) ?? [])['owner_user_id'] ?? 0) === $actorId;
+                    $id = (new MechanicGalleryService(new \MechanicYab\Core\Core\WpdbMechanicSupportingRepository($GLOBALS['wpdb']), $owner))->add((int) $request['id'], (int) get_current_user_id(), (array) $request->get_json_params());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'gallery_save_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/account/mechanics', [
+            'methods' => 'GET',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (): \WP_REST_Response {
+                $items = (new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']))->findByOwner((int) get_current_user_id());
+                return new \WP_REST_Response((new Response(true, ['items' => $items]))->toArray(), 200);
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/search', [
+            'methods' => 'GET',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                $filters = [];
+                foreach (['location_id', 'service_id', 'brand_id', 'model_id', 'trim_id', 'min_rating', 'min_price', 'max_price', 'latitude', 'longitude', 'radius_km', 'verified', 'open_now'] as $key) {
+                    if ($request->get_param($key) !== null) {
+                        $filters[$key] = $request->get_param($key);
+                    }
+                }
+                $result = (new SearchService(new MysqlSearchProvider($GLOBALS['wpdb'])))->search(
+                    (string) $request->get_param('q'),
+                    $filters,
+                    max(1, (int) $request->get_param('page')),
+                    min(100, max(1, (int) ($request->get_param('per_page') ?: 20))),
+                );
+                return new \WP_REST_Response((new Response(true, $result))->toArray(), 200);
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/map/directions', [
+            'methods' => 'GET',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $result = (new OpenDirectionsAdapter())->directions(
+                        (float) $request->get_param('from_lat'),
+                        (float) $request->get_param('from_lng'),
+                        (float) $request->get_param('to_lat'),
+                        (float) $request->get_param('to_lng'),
+                    );
+                    return new \WP_REST_Response((new Response(true, $result))->toArray(), 200);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'invalid_coordinates']]))->toArray(), 422);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/reviews', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $id = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb'])))->submit((array) $request->get_json_params(), (int) get_current_user_id());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_submit_failed']]))->toArray(), 422);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/reviews/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $data = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb'])))->publicById((int) $request['id']);
+                    return new \WP_REST_Response((new Response(true, $data))->toArray(), 200);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_not_found']]))->toArray(), 404);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/reviews/(?P<id>\d+)/report', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $payload = (array) $request->get_json_params();
+                    $payload['review_id'] = (int) $request['id'];
+                    $id = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb'])))->report($payload, (int) get_current_user_id());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) {
+                    return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_report_failed']]))->toArray(), 422);
+                }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/reviews/(?P<id>\d+)/reply', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $payload = (array) $request->get_json_params();
+                    $mechanicId = (int) ($payload['mechanic_id'] ?? 0);
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $owner = static fn (int $id): bool => (int) (($mechanics->find($id) ?? [])['owner_user_id'] ?? 0) === (int) get_current_user_id();
+                    $id = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb']), null, $owner))->reply((int) $request['id'], $mechanicId, (string) ($payload['body'] ?? ''));
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_reply_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/reviews/(?P<id>\d+)/moderate', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => current_user_can('mechanicyab_moderate_reviews'),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $status = (string) (((array) $request->get_json_params())['status'] ?? '');
+                    $ok = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb'])))->moderate((int) $request['id'], $status, (int) get_current_user_id());
+                    return new \WP_REST_Response((new Response(true, ['updated' => $ok]))->toArray(), 200);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_moderation_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/auth/otp/request', [
+            'methods' => 'POST',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $provider = new KavenegarSmsProvider((string) getenv('MECHANICYAB_KAVENEGAR_API_KEY'), (string) getenv('MECHANICYAB_KAVENEGAR_TEMPLATE'));
+                    $id = (new AuthService(new OtpService(new WpdbOtpChallengeRepository($GLOBALS['wpdb']), $provider)))->requestOtp((string) ($request->get_json_params()['mobile'] ?? ''));
+                    return new \WP_REST_Response((new Response(true, ['challenge_id' => $id]))->toArray(), 202);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'otp_request_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/auth/otp/verify', [
+            'methods' => 'POST',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $payload = (array) $request->get_json_params();
+                    $provider = new KavenegarSmsProvider((string) getenv('MECHANICYAB_KAVENEGAR_API_KEY'), (string) getenv('MECHANICYAB_KAVENEGAR_TEMPLATE'));
+                    $id = (new AuthService(new OtpService(new WpdbOtpChallengeRepository($GLOBALS['wpdb']), $provider)))->verifyOtp((string) ($payload['mobile'] ?? ''), (string) ($payload['code'] ?? ''));
+                    return new \WP_REST_Response((new Response(true, ['user_id' => $id]))->toArray(), 200);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'otp_verify_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/auth/logout', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (): \WP_REST_Response { (new AuthService(new OtpService(new WpdbOtpChallengeRepository($GLOBALS['wpdb']), new KavenegarSmsProvider('', ''))))->logout(); return new \WP_REST_Response((new Response(true, ['logged_out' => true]))->toArray(), 200); }]);
+        register_rest_route(API_NAMESPACE, '/account/favorites', ['methods' => 'GET', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => fn (): \WP_REST_Response => new \WP_REST_Response((new Response(true, (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->favorites((int) get_current_user_id())))->toArray(), 200)]);
+        register_rest_route(API_NAMESPACE, '/account/favorites', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $p = (array) $request->get_json_params(); $ok = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->addFavorite((int) get_current_user_id(), (string) ($p['entity_type'] ?? ''), (int) ($p['entity_id'] ?? 0)); return new \WP_REST_Response((new Response(true, ['saved' => $ok]))->toArray(), 201); }]);
+        register_rest_route(API_NAMESPACE, '/account/favorites', ['methods' => 'DELETE', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $p = (array) $request->get_json_params(); $ok = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->removeFavorite((int) get_current_user_id(), (string) ($p['entity_type'] ?? ''), (int) ($p['entity_id'] ?? 0)); return new \WP_REST_Response((new Response(true, ['removed' => $ok]))->toArray(), 200); }]);
+        register_rest_route(API_NAMESPACE, '/account/vehicles', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $id = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->createVehicle((int) get_current_user_id(), (array) $request->get_json_params()); return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201); }]);
+        register_rest_route(API_NAMESPACE, '/account/reminders', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $id = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->createReminder((int) get_current_user_id(), (array) $request->get_json_params()); return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201); }]);
+        register_rest_route(API_NAMESPACE, '/account/service-history', ['methods' => 'GET', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $items = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->serviceHistory((int) get_current_user_id(), (int) $request->get_param('vehicle_id')); return new \WP_REST_Response((new Response(true, $items))->toArray(), 200); }]);
+        register_rest_route(API_NAMESPACE, '/account/service-history', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $id = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->createServiceRecord((int) get_current_user_id(), (array) $request->get_json_params()); return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201); }]);
+        register_rest_route(API_NAMESPACE, '/account/notifications', ['methods' => 'GET', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => fn (): \WP_REST_Response => new \WP_REST_Response((new Response(true, (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->notifications((int) get_current_user_id())))->toArray(), 200)]);
+        register_rest_route(API_NAMESPACE, '/account/notifications/(?P<id>\d+)/read', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $ok = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->markNotificationRead((int) get_current_user_id(), (int) $request['id']); return new \WP_REST_Response((new Response(true, ['read' => $ok]))->toArray(), 200); }]);
+        register_rest_route(API_NAMESPACE, '/analytics/events', ['methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { try { $p = (array) $request->get_json_params(); $context = $p['context'] ?? []; if (is_user_logged_in()) { $context['wp_user_id'] = get_current_user_id(); } $ok = (new AnalyticsService(new WpdbAnalyticsRepository($GLOBALS['wpdb'])))->track((string) ($p['event_name'] ?? ''), isset($p['cta_id']) ? (string) $p['cta_id'] : null, is_array($context) ? $context : []); return new \WP_REST_Response((new Response(true, ['recorded' => $ok]))->toArray(), 202); } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'analytics_event_rejected']]))->toArray(), 422); } }]);
+        register_rest_route(API_NAMESPACE, '/payments/start', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { try { $p=(array)$request->get_json_params(); $service=new PaymentService(new WpdbPaymentRepository($GLOBALS['wpdb']),new ZibalPaymentGateway((string)getenv('MECHANICYAB_ZIBAL_MERCHANT'))); $result=$service->start((int)get_current_user_id(),new PaymentRequest((string)($p['order_key']??''),(int)($p['amount']??0),(string)($p['currency']??'IRR'),(string)($p['callback_url']??''))); return new \WP_REST_Response((new Response(true,$result))->toArray(),201); } catch(\Throwable){ return new \WP_REST_Response((new Response(false,null,[],[['code'=>'payment_start_failed']]))->toArray(),422); } }]);
+        register_rest_route(API_NAMESPACE, '/payments/callback', ['methods' => ['GET','POST'], 'permission_callback' => '__return_true', 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { try { $order=(string)$request->get_param('orderId'); $reference=(string)$request->get_param('trackId'); $payment=(new WpdbPaymentRepository($GLOBALS['wpdb']))->findByOrder($order); if($payment===null){throw new \RuntimeException('Payment not found.');} $result=(new PaymentService(new WpdbPaymentRepository($GLOBALS['wpdb']),new ZibalPaymentGateway((string)getenv('MECHANICYAB_ZIBAL_MERCHANT'))))->verify($order,$reference,(int)$payment['amount']); return new \WP_REST_Response((new Response(true,$result))->toArray(),200); } catch(\Throwable){ return new \WP_REST_Response((new Response(false,null,[],[['code'=>'payment_callback_unverified']]))->toArray(),422); } }]);
+    }
+
+    public function registerAdminMenu(): void
+    {
+        add_menu_page(
+            'مکانیک‌یاب',
+            'مکانیک‌یاب',
+            'mechanicyab_view_diagnostics',
+            'mechanicyab',
+            [$this, 'renderAdminPage'],
+            'dashicons-admin-tools',
+        );
+        add_submenu_page('mechanicyab', 'مدیریت Reviewها', 'مدیریت Reviewها', 'mechanicyab_moderate_reviews', 'mechanicyab-reviews', [$this, 'renderModerationPage']);
+        add_submenu_page('mechanicyab', 'داشبورد مکانیک', 'داشبورد مکانیک', 'mechanicyab_manage_mechanics', 'mechanicyab-dashboard', [$this, 'renderDashboardPage']);
+    }
+
+    public function registerSettings(): void
+    {
+        register_setting('mechanicyab', 'mechanicyab_settings', [
+            'type' => 'array',
+            'default' => [],
+            'sanitize_callback' => static fn (mixed $value): array => is_array($value) ? $value : [],
+        ]);
+    }
+
+    public function renderAdminPage(): void
+    {
+        if (!current_user_can('mechanicyab_view_diagnostics')) {
+            wp_die(esc_html__('Permission denied.', 'mechanicyab'));
+        }
+        $health = $this->health->report();
+        echo '<div class="wrap"><h1>مکانیک‌یاب</h1><p>Core Foundation v' . esc_html(VERSION) . '</p><pre>' . esc_html((string) wp_json_encode($health, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) . '</pre></div>';
+    }
+
+    public function renderModerationPage(): void
+    {
+        if (!current_user_can('mechanicyab_moderate_reviews')) { wp_die(esc_html__('Permission denied.', 'mechanicyab')); }
+        $endpoint = esc_url_raw(rest_url(API_NAMESPACE . '/reviews/'));
+        $nonce = wp_create_nonce('wp_rest');
+        echo '<div class="wrap" dir="rtl"><h1>مدیریت Reviewها</h1><p>شناسه Review و وضعیت جدید را وارد کنید. این عملیات از REST و Capability کنترل‌شده استفاده می‌کند.</p><form id="mechanicyab-moderation-form"><label>شناسه Review <input type="number" min="1" id="review-id" required></label> <label>وضعیت <select id="review-status"><option value="approved">تأیید</option><option value="rejected">رد</option><option value="under_review">بررسی مجدد</option></select></label> <button class="button button-primary">ذخیره</button></form><pre id="moderation-result"></pre><script>document.getElementById("mechanicyab-moderation-form").addEventListener("submit",async function(e){e.preventDefault();const id=document.getElementById("review-id").value;const result=await fetch(' . wp_json_encode($endpoint) . '+id+"/moderate",{method:"POST",headers:{"Content-Type":"application/json","X-WP-Nonce":' . wp_json_encode($nonce) . '},body:JSON.stringify({status:document.getElementById("review-status").value})});document.getElementById("moderation-result").textContent=await result.text();});</script></div>';
+    }
+
+    public function renderDashboardPage(): void
+    {
+        if (!current_user_can('mechanicyab_manage_mechanics')) { wp_die(esc_html__('Permission denied.', 'mechanicyab')); }
+        $items = (new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']))->findByOwner((int) get_current_user_id());
+        echo '<div class="wrap" dir="rtl"><h1>داشبورد مکانیک</h1><p>پروفایل‌های متعلق به حساب فعلی:</p><table class="widefat striped"><thead><tr><th>نام</th><th>وضعیت</th><th>انتشار</th><th>تأیید</th><th>تکمیل پروفایل</th><th>امتیاز</th><th>Review</th></tr></thead><tbody>';
+        foreach ($items as $item) { echo '<tr><td>' . esc_html((string) $item['name']) . '</td><td>' . esc_html((string) $item['status']) . '</td><td>' . esc_html((string) $item['publication_status']) . '</td><td>' . esc_html((string) $item['verification_status']) . '</td><td>' . esc_html((string) $item['profile_completion_percent']) . '%</td><td>' . esc_html((string) $item['average_rating']) . '</td><td>' . esc_html((string) $item['review_count']) . '</td></tr>'; }
+        if ($items === []) { echo '<tr><td colspan="7">هنوز پروفایلی برای این حساب ثبت نشده است.</td></tr>'; }
+        echo '</tbody></table></div>';
+    }
+
+    public function cli(array $args, array $assocArgs): void
+    {
+        $command = $args[0] ?? 'status';
+        $payload = match ($command) {
+            'status' => ['version' => VERSION, 'status' => 'active'],
+            'modules:list' => $this->registry->all(),
+            'modules:health', 'health' => [
+                'application' => $this->health->report(),
+                'schema' => $this->schema->healthReport(),
+            ],
+            'migrate' => $this->migrateFromCli(),
+            default => ['error' => 'Unknown command. Use status, modules:list, or health.'],
+        };
+        \WP_CLI::line((string) wp_json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+
+    private function migrateFromCli(): array
+    {
+        $this->schema->migrate();
+        return $this->schema->healthReport();
+    }
+}
+
+register_activation_hook(__FILE__, [Plugin::class, 'activate']);
+
+add_action('plugins_loaded', static function (): void {
+    (new Plugin())->boot();
+});

@@ -1,0 +1,26 @@
+name: MechanicYab Foundation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, mysqli, json
+          tools: composer:v2
+      - name: Validate Composer manifests
+        run: composer validate --strict --no-check-publish --working-dir=plugins/mechanicyab-core
+      - name: Install plugin dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist --working-dir=plugins/mechanicyab-core
+      - name: PHP syntax checks
+        run: find plugins theme -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: PHPStan static analysis
+        run: cd plugins/mechanicyab-core && vendor/bin/phpstan analyse --configuration=phpstan.neon --no-progress --error-format=table
+      - name: Foundation tests
+        run: composer require --dev --no-interaction --no-progress phpunit/phpunit:^10 --working-dir=plugins/mechanicyab-core && cd plugins/mechanicyab-core && vendor/bin/phpunit --configuration phpunit.xml.dist

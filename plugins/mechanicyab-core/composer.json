@@ -1,0 +1,19 @@
+{
+  "name": "mechanicyab/core",
+  "description": "MechanicYab WordPress Core Plugin Foundation",
+  "type": "wordpress-plugin",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "MechanicYab\\Core\\": "src/"
+    }
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10",
+    "phpstan/phpstan": "^2.2",
+    "php-stubs/wordpress-stubs": "^6.8"
+  }
+}
