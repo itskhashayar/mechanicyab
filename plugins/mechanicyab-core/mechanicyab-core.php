@@ -136,7 +136,7 @@ final class Plugin
                 }
             },
         ]);
-        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles)', [
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles|offers|faq)', [
             'methods' => 'GET',
             'permission_callback' => static fn (): bool => is_user_logged_in(),
             'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
@@ -148,7 +148,7 @@ final class Plugin
                 } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'profile_read_failed']]))->toArray(), 403); }
             },
         ]);
-        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles)', [
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles|offers|faq)', [
             'methods' => 'POST',
             'permission_callback' => static fn (): bool => is_user_logged_in(),
             'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
@@ -160,7 +160,7 @@ final class Plugin
                 } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'profile_save_failed']]))->toArray(), 422); }
             },
         ]);
-        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles)/(?P<record_id>\d+)', [
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles|offers|faq)/(?P<record_id>\d+)', [
             'methods' => 'DELETE',
             'permission_callback' => static fn (): bool => is_user_logged_in(),
             'callback' => function (\WP_REST_Request $request): \WP_REST_Response {

@@ -94,6 +94,8 @@ final class WpdbMechanicSupportingRepository implements MechanicSupportingReposi
             'special_hours' => ['table' => 'mechanic_special_hours', 'fields' => ['date','is_closed','open_time','close_time','reason']],
             'employees' => ['table' => 'mechanic_employees', 'fields' => ['name','position','specialty','experience_years','bio','status','sort_order']],
             'social_profiles' => ['table' => 'mechanic_social_profiles', 'fields' => ['platform','url','username','status']],
+            'offers' => ['table' => 'mechanic_offers', 'fields' => ['title','description','discount_type','discount_value','starts_at','ends_at','status']],
+            'faq' => ['table' => 'mechanic_faqs', 'fields' => ['question','answer','status','sort_order']],
         ];
         if (!isset($definitions[$collection])) { throw new \InvalidArgumentException('Unsupported profile collection.'); }
         $definition = $definitions[$collection]; $payload = ['mechanic_id' => $mechanicId]; $formats = ['%d'];
@@ -105,7 +107,7 @@ final class WpdbMechanicSupportingRepository implements MechanicSupportingReposi
 
     public function listProfileCollection(string $collection, int $mechanicId): array
     {
-        $tables = ['special_hours' => 'mechanic_special_hours', 'employees' => 'mechanic_employees', 'social_profiles' => 'mechanic_social_profiles'];
+        $tables = ['special_hours' => 'mechanic_special_hours', 'employees' => 'mechanic_employees', 'social_profiles' => 'mechanic_social_profiles', 'offers' => 'mechanic_offers', 'faq' => 'mechanic_faqs'];
         if (!isset($tables[$collection])) { throw new \InvalidArgumentException('Unsupported profile collection.'); }
         $rows = $this->wpdb->get_results($this->wpdb->prepare("SELECT * FROM {$this->table($tables[$collection])} WHERE mechanic_id = %d ORDER BY id DESC", $mechanicId), ARRAY_A);
         return is_array($rows) ? array_map('array_filter', $rows) : [];
@@ -113,7 +115,7 @@ final class WpdbMechanicSupportingRepository implements MechanicSupportingReposi
 
     public function deleteProfileCollection(string $collection, int $mechanicId, int $recordId): bool
     {
-        $tables = ['special_hours' => 'mechanic_special_hours', 'employees' => 'mechanic_employees', 'social_profiles' => 'mechanic_social_profiles'];
+        $tables = ['special_hours' => 'mechanic_special_hours', 'employees' => 'mechanic_employees', 'social_profiles' => 'mechanic_social_profiles', 'offers' => 'mechanic_offers', 'faq' => 'mechanic_faqs'];
         if (!isset($tables[$collection])) { throw new \InvalidArgumentException('Unsupported profile collection.'); }
         return $this->wpdb->delete($this->table($tables[$collection]), ['id' => $recordId, 'mechanic_id' => $mechanicId], ['%d','%d']) !== false;
     }
