@@ -185,6 +185,14 @@ final class Plugin
                 } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'gallery_save_failed']]))->toArray(), 422); }
             },
         ]);
+        register_rest_route(API_NAMESPACE, '/account/mechanics', [
+            'methods' => 'GET',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (): \WP_REST_Response {
+                $items = (new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']))->findByOwner((int) get_current_user_id());
+                return new \WP_REST_Response((new Response(true, ['items' => $items]))->toArray(), 200);
+            },
+        ]);
         register_rest_route(API_NAMESPACE, '/search', [
             'methods' => 'GET',
             'permission_callback' => '__return_true',
@@ -333,6 +341,7 @@ final class Plugin
             'dashicons-admin-tools',
         );
         add_submenu_page('mechanicyab', 'مدیریت Reviewها', 'مدیریت Reviewها', 'mechanicyab_moderate_reviews', 'mechanicyab-reviews', [$this, 'renderModerationPage']);
+        add_submenu_page('mechanicyab', 'داشبورد مکانیک', 'داشبورد مکانیک', 'mechanicyab_manage_mechanics', 'mechanicyab-dashboard', [$this, 'renderDashboardPage']);
     }
 
     public function registerSettings(): void
@@ -359,6 +368,16 @@ final class Plugin
         $endpoint = esc_url_raw(rest_url(API_NAMESPACE . '/reviews/'));
         $nonce = wp_create_nonce('wp_rest');
         echo '<div class="wrap" dir="rtl"><h1>مدیریت Reviewها</h1><p>شناسه Review و وضعیت جدید را وارد کنید. این عملیات از REST و Capability کنترل‌شده استفاده می‌کند.</p><form id="mechanicyab-moderation-form"><label>شناسه Review <input type="number" min="1" id="review-id" required></label> <label>وضعیت <select id="review-status"><option value="approved">تأیید</option><option value="rejected">رد</option><option value="under_review">بررسی مجدد</option></select></label> <button class="button button-primary">ذخیره</button></form><pre id="moderation-result"></pre><script>document.getElementById("mechanicyab-moderation-form").addEventListener("submit",async function(e){e.preventDefault();const id=document.getElementById("review-id").value;const result=await fetch(' . wp_json_encode($endpoint) . '+id+"/moderate",{method:"POST",headers:{"Content-Type":"application/json","X-WP-Nonce":' . wp_json_encode($nonce) . '},body:JSON.stringify({status:document.getElementById("review-status").value})});document.getElementById("moderation-result").textContent=await result.text();});</script></div>';
+    }
+
+    public function renderDashboardPage(): void
+    {
+        if (!current_user_can('mechanicyab_manage_mechanics')) { wp_die(esc_html__('Permission denied.', 'mechanicyab')); }
+        $items = (new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']))->findByOwner((int) get_current_user_id());
+        echo '<div class="wrap" dir="rtl"><h1>داشبورد مکانیک</h1><p>پروفایل‌های متعلق به حساب فعلی:</p><table class="widefat striped"><thead><tr><th>نام</th><th>وضعیت</th><th>انتشار</th><th>تأیید</th><th>تکمیل پروفایل</th><th>امتیاز</th><th>Review</th></tr></thead><tbody>';
+        foreach ($items as $item) { echo '<tr><td>' . esc_html((string) $item['name']) . '</td><td>' . esc_html((string) $item['status']) . '</td><td>' . esc_html((string) $item['publication_status']) . '</td><td>' . esc_html((string) $item['verification_status']) . '</td><td>' . esc_html((string) $item['profile_completion_percent']) . '%</td><td>' . esc_html((string) $item['average_rating']) . '</td><td>' . esc_html((string) $item['review_count']) . '</td></tr>'; }
+        if ($items === []) { echo '<tr><td colspan="7">هنوز پروفایلی برای این حساب ثبت نشده است.</td></tr>'; }
+        echo '</tbody></table></div>';
     }
 
     public function cli(array $args, array $assocArgs): void

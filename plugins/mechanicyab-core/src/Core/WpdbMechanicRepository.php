@@ -24,6 +24,13 @@ final class WpdbMechanicRepository implements MechanicRepository
         return is_array($row) ? $row : null;
     }
 
+    /** @return list<array<string,mixed>> */
+    public function findByOwner(int $ownerUserId): array
+    {
+        $rows = $this->wpdb->get_results($this->wpdb->prepare("SELECT id, name, slug, status, publication_status, verification_status, profile_completion_percent, average_rating, review_count, updated_at FROM {$this->table()} WHERE owner_user_id = %d AND deleted_at IS NULL ORDER BY updated_at DESC", $ownerUserId), ARRAY_A);
+        return is_array($rows) ? $rows : [];
+    }
+
     public function create(array $data): int
     {
         $now = gmdate('Y-m-d H:i:s');
