@@ -9,6 +9,7 @@ use MechanicYab\Core\Contracts\MechanicSupportingRepository;
 use MechanicYab\Core\Core\MechanicAuthorization;
 use MechanicYab\Core\Core\MechanicOperationsService;
 use MechanicYab\Core\Core\MechanicProfileService;
+use MechanicYab\Core\Core\MechanicGalleryService;
 use PHPUnit\Framework\TestCase;
 
 final class MechanicOperationsTest extends TestCase
@@ -41,6 +42,14 @@ final class MechanicOperationsTest extends TestCase
         self::assertSame(1, $service->save(12, 7, 'employees', ['name' => 'Ali']));
         $this->expectException(\DomainException::class);
         $service->list(12, 8, 'employees');
+    }
+
+    public function testGalleryRequiresOwnerAndMediaId(): void
+    {
+        $service = new MechanicGalleryService(new OperationsSupportingRepository(), static fn (int $mechanicId, int $actorId): bool => $mechanicId === 12 && $actorId === 7);
+        self::assertSame(1, $service->add(12, 7, ['media_id' => 44]));
+        $this->expectException(\DomainException::class);
+        $service->add(12, 8, ['media_id' => 44]);
     }
 }
 

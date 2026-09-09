@@ -17,6 +17,7 @@ use MechanicYab\Core\Core\Health;
 use MechanicYab\Core\Core\MechanicPublicResource;
 use MechanicYab\Core\Core\MechanicService;
 use MechanicYab\Core\Core\MechanicProfileService;
+use MechanicYab\Core\Core\MechanicGalleryService;
 use MechanicYab\Core\Core\ModuleRegistry;
 use MechanicYab\Core\Core\MysqlSearchProvider;
 use MechanicYab\Core\Core\OpenDirectionsAdapter;
@@ -172,6 +173,18 @@ final class Plugin
                 } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'profile_delete_failed']]))->toArray(), 422); }
             },
         ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/gallery', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $owner = static fn (int $mechanicId, int $actorId): bool => (int) (($mechanics->find($mechanicId) ?? [])['owner_user_id'] ?? 0) === $actorId;
+                    $id = (new MechanicGalleryService(new \MechanicYab\Core\Core\WpdbMechanicSupportingRepository($GLOBALS['wpdb']), $owner))->add((int) $request['id'], (int) get_current_user_id(), (array) $request->get_json_params());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'gallery_save_failed']]))->toArray(), 422); }
+            },
+        ]);
         register_rest_route(API_NAMESPACE, '/search', [
             'methods' => 'GET',
             'permission_callback' => '__return_true',
@@ -260,6 +273,17 @@ final class Plugin
                 } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_reply_failed']]))->toArray(), 422); }
             },
         ]);
+        register_rest_route(API_NAMESPACE, '/reviews/(?P<id>\d+)/moderate', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => current_user_can('mechanicyab_moderate_reviews'),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $status = (string) (((array) $request->get_json_params())['status'] ?? '');
+                    $ok = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb'])))->moderate((int) $request['id'], $status, (int) get_current_user_id());
+                    return new \WP_REST_Response((new Response(true, ['updated' => $ok]))->toArray(), 200);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_moderation_failed']]))->toArray(), 422); }
+            },
+        ]);
         register_rest_route(API_NAMESPACE, '/auth/otp/request', [
             'methods' => 'POST',
             'permission_callback' => '__return_true',
@@ -308,6 +332,7 @@ final class Plugin
             [$this, 'renderAdminPage'],
             'dashicons-admin-tools',
         );
+        add_submenu_page('mechanicyab', 'مدیریت Reviewها', 'مدیریت Reviewها', 'mechanicyab_moderate_reviews', 'mechanicyab-reviews', [$this, 'renderModerationPage']);
     }
 
     public function registerSettings(): void
@@ -326,6 +351,14 @@ final class Plugin
         }
         $health = $this->health->report();
         echo '<div class="wrap"><h1>مکانیک‌یاب</h1><p>Core Foundation v' . esc_html(VERSION) . '</p><pre>' . esc_html((string) wp_json_encode($health, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) . '</pre></div>';
+    }
+
+    public function renderModerationPage(): void
+    {
+        if (!current_user_can('mechanicyab_moderate_reviews')) { wp_die(esc_html__('Permission denied.', 'mechanicyab')); }
+        $endpoint = esc_url_raw(rest_url(API_NAMESPACE . '/reviews/'));
+        $nonce = wp_create_nonce('wp_rest');
+        echo '<div class="wrap" dir="rtl"><h1>مدیریت Reviewها</h1><p>شناسه Review و وضعیت جدید را وارد کنید. این عملیات از REST و Capability کنترل‌شده استفاده می‌کند.</p><form id="mechanicyab-moderation-form"><label>شناسه Review <input type="number" min="1" id="review-id" required></label> <label>وضعیت <select id="review-status"><option value="approved">تأیید</option><option value="rejected">رد</option><option value="under_review">بررسی مجدد</option></select></label> <button class="button button-primary">ذخیره</button></form><pre id="moderation-result"></pre><script>document.getElementById("mechanicyab-moderation-form").addEventListener("submit",async function(e){e.preventDefault();const id=document.getElementById("review-id").value;const result=await fetch(' . wp_json_encode($endpoint) . '+id+"/moderate",{method:"POST",headers:{"Content-Type":"application/json","X-WP-Nonce":' . wp_json_encode($nonce) . '},body:JSON.stringify({status:document.getElementById("review-status").value})});document.getElementById("moderation-result").textContent=await result.text();});</script></div>';
     }
 
     public function cli(array $args, array $assocArgs): void
