@@ -16,6 +16,7 @@ use MechanicYab\Core\Contracts\Response;
 use MechanicYab\Core\Core\Health;
 use MechanicYab\Core\Core\MechanicPublicResource;
 use MechanicYab\Core\Core\MechanicService;
+use MechanicYab\Core\Core\MechanicProfileService;
 use MechanicYab\Core\Core\ModuleRegistry;
 use MechanicYab\Core\Core\MysqlSearchProvider;
 use MechanicYab\Core\Core\OpenDirectionsAdapter;
@@ -133,6 +134,42 @@ final class Plugin
                 } catch (\Throwable) {
                     return new \WP_REST_Response((new Response(false, null, [], [['code' => 'mechanic_create_failed']]))->toArray(), 422);
                 }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles)', [
+            'methods' => 'GET',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $service = new MechanicProfileService(new \MechanicYab\Core\Core\WpdbMechanicSupportingRepository($GLOBALS['wpdb']), static fn (int $id): array => $mechanics->find($id) ?? []);
+                    $items = $service->list((int) $request['id'], (int) get_current_user_id(), (string) $request['collection']);
+                    return new \WP_REST_Response((new Response(true, ['items' => $items]))->toArray(), 200);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'profile_read_failed']]))->toArray(), 403); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles)', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $service = new MechanicProfileService(new \MechanicYab\Core\Core\WpdbMechanicSupportingRepository($GLOBALS['wpdb']), static fn (int $id): array => $mechanics->find($id) ?? []);
+                    $id = $service->save((int) $request['id'], (int) get_current_user_id(), (string) $request['collection'], (array) $request->get_json_params());
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'profile_save_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/mechanics/(?P<id>\d+)/profile/(?P<collection>special_hours|employees|social_profiles)/(?P<record_id>\d+)', [
+            'methods' => 'DELETE',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $service = new MechanicProfileService(new \MechanicYab\Core\Core\WpdbMechanicSupportingRepository($GLOBALS['wpdb']), static fn (int $id): array => $mechanics->find($id) ?? []);
+                    $deleted = $service->delete((int) $request['id'], (int) get_current_user_id(), (string) $request['collection'], (int) $request['record_id']);
+                    return new \WP_REST_Response((new Response(true, ['deleted' => $deleted]))->toArray(), 200);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'profile_delete_failed']]))->toArray(), 422); }
             },
         ]);
         register_rest_route(API_NAMESPACE, '/search', [

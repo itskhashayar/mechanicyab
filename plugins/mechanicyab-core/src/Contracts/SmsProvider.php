@@ -12,7 +12,7 @@ interface SmsProvider
 
 interface OtpChallengeRepository
 {
-    /** @return array{id: int, attempts: int, max_attempts: int, expires_at: string, status: string}|null */
+    /** @return array{id: int, otp_hash: string, attempts: int, max_attempts: int, expires_at: string, status: string}|null */
     public function active(string $mobileHash, string $purpose): ?array;
     public function create(string $mobileHash, string $otpHash, string $purpose, string $expiresAt, string $lastSentAt): int;
     public function markSent(int $id, ?string $reference): void;

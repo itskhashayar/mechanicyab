@@ -38,7 +38,7 @@ final class OtpService
         if ($active === null || $active['status'] !== 'active' || strtotime((string) $active['expires_at']) <= time() || (int) $active['attempts'] >= (int) $active['max_attempts']) {
             return false;
         }
-        $valid = hash_equals($this->hash($code), (string) ($active['otp_hash'] ?? ''));
+        $valid = hash_equals($this->hash($code), (string) $active['otp_hash']);
         if (!$valid) {
             $this->repository->failAttempt((int) $active['id']);
             return false;

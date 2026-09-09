@@ -13,7 +13,7 @@ final class MysqlSearchProvider implements SearchProvider
 
     public function search(SearchRequest $request): array
     {
-        $table = $this->table();
+        $table = $this->table('mechanics');
         $where = ["m.deleted_at IS NULL", "m.status = 'active'", "m.publication_status = 'published'"];
         $params = [];
         if ($request->query !== '') {
@@ -89,11 +89,11 @@ final class MysqlSearchProvider implements SearchProvider
         ];
     }
 
-    private function table(): string
+    private function table(string $name): string
     {
         if (!isset($this->wpdb->prefix)) {
             throw new \RuntimeException('WordPress database prefix is unavailable.');
         }
-        return $this->wpdb->prefix . 'my_mechanics';
+        return $this->wpdb->prefix . 'my_' . $name;
     }
 }

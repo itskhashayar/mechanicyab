@@ -14,3 +14,6 @@ node_modules/
 wp-content/uploads/
 wp-content/cache/
 wp-content/upgrade/
+
+# Local analysis caches
+plugins/mechanicyab-core/.phpstan-cache/

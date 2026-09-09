@@ -19,10 +19,6 @@ final class Health
         ];
         $status = 'healthy';
         foreach ($checks as $check) {
-            if ($check['status'] === 'failed') {
-                $status = 'failed';
-                break;
-            }
             if ($check['status'] === 'unknown' && $status === 'healthy') {
                 $status = 'degraded';
             }

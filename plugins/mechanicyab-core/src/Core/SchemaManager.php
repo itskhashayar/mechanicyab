@@ -126,7 +126,7 @@ final class SchemaManager
         if (!function_exists('add_option')) {
             return true;
         }
-        return (bool) add_option(self::LOCK, time(), '', 'no');
+        return (bool) add_option(self::LOCK, time(), '', false);
     }
 
     private function releaseLock(): void
@@ -153,8 +153,6 @@ final class SchemaManager
             $this->currentVersion() < 6 => ['stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8', 'stage-10-ledger-v9', 'stage-11-ai-v10'],
             $this->currentVersion() < 7 => ['stage-9-analytics-v7', 'stage-10-financial-v8', 'stage-10-ledger-v9', 'stage-11-ai-v10'],
             $this->currentVersion() < 8 => ['stage-10-financial-v8', 'stage-10-ledger-v9', 'stage-11-ai-v10'],
-            $this->currentVersion() < 7 => ['stage-9-analytics-v7', 'stage-10-financial-v8'],
-            $this->currentVersion() < 8 => ['stage-10-financial-v8', 'stage-10-ledger-v9'],
             $this->currentVersion() < 9 => ['stage-10-ledger-v9', 'stage-11-ai-v10'],
             $this->currentVersion() < 10 => ['stage-11-ai-v10'],
             default => [],

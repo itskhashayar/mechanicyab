@@ -8,6 +8,7 @@ use MechanicYab\Core\Contracts\MechanicRepository;
 use MechanicYab\Core\Contracts\MechanicSupportingRepository;
 use MechanicYab\Core\Core\MechanicAuthorization;
 use MechanicYab\Core\Core\MechanicOperationsService;
+use MechanicYab\Core\Core\MechanicProfileService;
 use PHPUnit\Framework\TestCase;
 
 final class MechanicOperationsTest extends TestCase
@@ -31,6 +32,15 @@ final class MechanicOperationsTest extends TestCase
         $verificationId = $service->submitVerification($id, ['type' => 'license'], 7);
         self::assertTrue($service->approveVerification($verificationId, 99));
         self::assertSame('approved', $supporting->findVerification($verificationId)['status']);
+    }
+
+    public function testProfileCollectionsRequireMechanicOwner(): void
+    {
+        $supporting = new OperationsSupportingRepository();
+        $service = new MechanicProfileService($supporting, static fn (int $id): array => ['id' => $id, 'owner_user_id' => 7]);
+        self::assertSame(1, $service->save(12, 7, 'employees', ['name' => 'Ali']));
+        $this->expectException(\DomainException::class);
+        $service->list(12, 8, 'employees');
     }
 }
 

@@ -47,9 +47,7 @@ final class ReviewService
         $updated = $this->repository->updateModeration($reviewId, $status, $actorId);
         if ($updated && $status === 'approved') {
             $review = $this->repository->find($reviewId);
-            if ($review !== null) {
-                $this->repository->rebuildMechanicSummary((int) $review['mechanic_id']);
-            }
+            $this->repository->rebuildMechanicSummary((int) $review['mechanic_id']);
         }
         return $updated;
     }
