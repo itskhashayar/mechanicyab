@@ -21,6 +21,10 @@ use MechanicYab\Core\Core\MysqlSearchProvider;
 use MechanicYab\Core\Core\OpenDirectionsAdapter;
 use MechanicYab\Core\Core\AuthService;
 use MechanicYab\Core\Core\AnalyticsService;
+use MechanicYab\Core\Core\PaymentService;
+use MechanicYab\Core\Core\ZibalPaymentGateway;
+use MechanicYab\Core\Contracts\PaymentRequest;
+use MechanicYab\Core\Core\WpdbPaymentRepository;
 use MechanicYab\Core\Core\KavenegarSmsProvider;
 use MechanicYab\Core\Core\OtpService;
 use MechanicYab\Core\Core\PublicRouteResolver;
@@ -239,6 +243,8 @@ final class Plugin
         register_rest_route(API_NAMESPACE, '/account/notifications', ['methods' => 'GET', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => fn (): \WP_REST_Response => new \WP_REST_Response((new Response(true, (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->notifications((int) get_current_user_id())))->toArray(), 200)]);
         register_rest_route(API_NAMESPACE, '/account/notifications/(?P<id>\d+)/read', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $ok = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->markNotificationRead((int) get_current_user_id(), (int) $request['id']); return new \WP_REST_Response((new Response(true, ['read' => $ok]))->toArray(), 200); }]);
         register_rest_route(API_NAMESPACE, '/analytics/events', ['methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { try { $p = (array) $request->get_json_params(); $context = $p['context'] ?? []; if (is_user_logged_in()) { $context['wp_user_id'] = get_current_user_id(); } $ok = (new AnalyticsService(new WpdbAnalyticsRepository($GLOBALS['wpdb'])))->track((string) ($p['event_name'] ?? ''), isset($p['cta_id']) ? (string) $p['cta_id'] : null, is_array($context) ? $context : []); return new \WP_REST_Response((new Response(true, ['recorded' => $ok]))->toArray(), 202); } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'analytics_event_rejected']]))->toArray(), 422); } }]);
+        register_rest_route(API_NAMESPACE, '/payments/start', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { try { $p=(array)$request->get_json_params(); $service=new PaymentService(new WpdbPaymentRepository($GLOBALS['wpdb']),new ZibalPaymentGateway((string)getenv('MECHANICYAB_ZIBAL_MERCHANT'))); $result=$service->start((int)get_current_user_id(),new PaymentRequest((string)($p['order_key']??''),(int)($p['amount']??0),(string)($p['currency']??'IRR'),(string)($p['callback_url']??''))); return new \WP_REST_Response((new Response(true,$result))->toArray(),201); } catch(\Throwable){ return new \WP_REST_Response((new Response(false,null,[],[['code'=>'payment_start_failed']]))->toArray(),422); } }]);
+        register_rest_route(API_NAMESPACE, '/payments/callback', ['methods' => ['GET','POST'], 'permission_callback' => '__return_true', 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { try { $order=(string)$request->get_param('orderId'); $reference=(string)$request->get_param('trackId'); $payment=(new WpdbPaymentRepository($GLOBALS['wpdb']))->findByOrder($order); if($payment===null){throw new \RuntimeException('Payment not found.');} $result=(new PaymentService(new WpdbPaymentRepository($GLOBALS['wpdb']),new ZibalPaymentGateway((string)getenv('MECHANICYAB_ZIBAL_MERCHANT'))))->verify($order,$reference,(int)$payment['amount']); return new \WP_REST_Response((new Response(true,$result))->toArray(),200); } catch(\Throwable){ return new \WP_REST_Response((new Response(false,null,[],[['code'=>'payment_callback_unverified']]))->toArray(),422); } }]);
     }
 
     public function registerAdminMenu(): void
