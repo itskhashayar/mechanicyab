@@ -8,7 +8,7 @@ use MechanicYab\Core\Contracts\ReviewRepository;
 
 final class ReviewService
 {
-    public function __construct(private readonly ReviewRepository $repository, private readonly ?\Closure $moderationChecker = null) {}
+    public function __construct(private readonly ReviewRepository $repository, private readonly ?\Closure $moderationChecker = null, private readonly ?\Closure $ownerChecker = null) {}
 
     /** @param array<string, mixed> $data */
     public function submit(array $data, int $wpUserId): int
@@ -63,6 +63,16 @@ final class ReviewService
         return $this->repository->createReport($data);
     }
 
+    public function reply(int $reviewId, int $mechanicId, string $body): int
+    {
+        if ($this->ownerChecker !== null && !(bool) ($this->ownerChecker)($mechanicId)) { throw new \DomainException('Mechanic ownership is required.'); }
+        if ($reviewId < 1 || $mechanicId < 1 || trim($body) === '') { throw new \InvalidArgumentException('Review, mechanic and reply body are required.'); }
+        $review = $this->repository->find($reviewId);
+        if ($review === null || (int) ($review['mechanic_id'] ?? 0) !== $mechanicId || ($review['moderation_status'] ?? '') !== 'approved') { throw new \DomainException('Only an approved review owned by this mechanic can be replied to.'); }
+        if ($this->repository->findReply($reviewId) !== null) { throw new \DomainException('A reply already exists for this review.'); }
+        return $this->repository->createReply(['review_id' => $reviewId, 'mechanic_id' => $mechanicId, 'body' => trim($body)]);
+    }
+
     /** @return array<string, mixed> */
     public function publicById(int $reviewId): array
     {
@@ -70,7 +80,10 @@ final class ReviewService
         if ($review === null || ($review['moderation_status'] ?? '') !== 'approved' || ($review['status'] ?? '') !== 'active') {
             throw new \RuntimeException('Review not found.');
         }
-        return (new ReviewPublicResource())->toResponse($review);
+        $response = (new ReviewPublicResource())->toResponse($review);
+        $reply = $this->repository->findReply($reviewId);
+        if ($reply !== null) { $response['reply'] = ['id' => (int) $reply['id'], 'body' => (string) $reply['body'], 'created_at' => $reply['created_at'] ?? null]; }
+        return $response;
     }
 
     private function canModerate(): bool

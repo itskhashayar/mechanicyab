@@ -68,6 +68,20 @@ final class WpdbReviewRepository implements ReviewRepository
         return $this->wpdb->update($this->table('mechanics'), ['average_rating' => (float) ($summary['average_rating'] ?? 0), 'review_count' => (int) ($summary['review_count'] ?? 0), 'updated_at' => gmdate('Y-m-d H:i:s')], ['id' => $mechanicId], ['%f','%d','%s'], ['%d']) !== false;
     }
 
+    public function createReply(array $data): int
+    {
+        $now = gmdate('Y-m-d H:i:s');
+        $payload = ['review_id' => (int) $data['review_id'], 'mechanic_id' => (int) $data['mechanic_id'], 'body' => trim((string) $data['body']), 'status' => 'active', 'created_at' => $now, 'updated_at' => $now];
+        if ($this->wpdb->insert($this->table('review_replies'), $payload, ['%d','%d','%s','%s','%s','%s']) === false) { throw new \RuntimeException('Review reply could not be created.'); }
+        return (int) $this->wpdb->insert_id;
+    }
+
+    public function findReply(int $reviewId): ?array
+    {
+        $row = $this->wpdb->get_row($this->wpdb->prepare("SELECT id, review_id, body, created_at FROM {$this->table('review_replies')} WHERE review_id = %d AND status = 'active' LIMIT 1", $reviewId), ARRAY_A);
+        return is_array($row) ? $row : null;
+    }
+
     private function table(string $name): string
     {
         if (!isset($this->wpdb->prefix)) {

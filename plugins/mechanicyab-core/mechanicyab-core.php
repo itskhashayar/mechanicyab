@@ -246,6 +246,20 @@ final class Plugin
                 }
             },
         ]);
+        register_rest_route(API_NAMESPACE, '/reviews/(?P<id>\d+)/reply', [
+            'methods' => 'POST',
+            'permission_callback' => static fn (): bool => is_user_logged_in(),
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $payload = (array) $request->get_json_params();
+                    $mechanicId = (int) ($payload['mechanic_id'] ?? 0);
+                    $mechanics = new \MechanicYab\Core\Core\WpdbMechanicRepository($GLOBALS['wpdb']);
+                    $owner = static fn (int $id): bool => (int) (($mechanics->find($id) ?? [])['owner_user_id'] ?? 0) === (int) get_current_user_id();
+                    $id = (new ReviewService(new \MechanicYab\Core\Core\WpdbReviewRepository($GLOBALS['wpdb']), null, $owner))->reply((int) $request['id'], $mechanicId, (string) ($payload['body'] ?? ''));
+                    return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'review_reply_failed']]))->toArray(), 422); }
+            },
+        ]);
         register_rest_route(API_NAMESPACE, '/auth/otp/request', [
             'methods' => 'POST',
             'permission_callback' => '__return_true',

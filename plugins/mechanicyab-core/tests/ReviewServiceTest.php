@@ -45,6 +45,18 @@ final class ReviewServiceTest extends TestCase
         self::assertArrayNotHasKey('wp_user_id', $data);
         self::assertSame(4, $data['rating']);
     }
+
+    public function testMechanicCanReplyOnceToApprovedReview(): void
+    {
+        $repository = new InMemoryReviewRepository();
+        $service = new ReviewService($repository, static fn (): bool => true, static fn (int $mechanicId): bool => $mechanicId === 3);
+        $id = $service->submit(['mechanic_id' => 3, 'rating' => 4, 'body' => 'Good'], 99);
+        $service->moderate($id, 'approved', 1);
+        self::assertSame(1, $service->reply($id, 3, 'Thank you.'));
+        self::assertSame('Thank you.', $service->publicById($id)['reply']['body']);
+        $this->expectException(\DomainException::class);
+        $service->reply($id, 3, 'Second reply');
+    }
 }
 
 final class InMemoryReviewRepository implements ReviewRepository
@@ -57,4 +69,6 @@ final class InMemoryReviewRepository implements ReviewRepository
     public function updateModeration(int $id, string $status, int $actorId): bool { $this->records[$id]['moderation_status'] = $status; return true; }
     public function createReport(array $data): int { return 1; }
     public function rebuildMechanicSummary(int $mechanicId): bool { $this->rebuiltMechanicId = $mechanicId; return true; }
+    public function createReply(array $data): int { $this->records[$data['review_id']]['reply'] = ['id' => 1, 'body' => $data['body'], 'created_at' => '2026-01-01 00:00:00']; return 1; }
+    public function findReply(int $reviewId): ?array { return $this->records[$reviewId]['reply'] ?? null; }
 }

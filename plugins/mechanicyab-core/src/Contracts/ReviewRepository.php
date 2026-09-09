@@ -18,4 +18,10 @@ interface ReviewRepository
     public function createReport(array $data): int;
 
     public function rebuildMechanicSummary(int $mechanicId): bool;
+
+    /** @param array<string, mixed> $data */
+    public function createReply(array $data): int;
+
+    /** @return array<string, mixed>|null */
+    public function findReply(int $reviewId): ?array;
 }
