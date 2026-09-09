@@ -22,4 +22,12 @@ interface MechanicSupportingRepository
 
     /** @param array<string, mixed> $record */
     public function saveGalleryItem(int $mechanicId, array $record): int;
+
+    /** @param array<string, mixed> $record */
+    public function saveProfileCollection(string $collection, int $mechanicId, array $record): int;
+
+    /** @return list<array<string, mixed>> */
+    public function listProfileCollection(string $collection, int $mechanicId): array;
+
+    public function deleteProfileCollection(string $collection, int $mechanicId, int $recordId): bool;
 }

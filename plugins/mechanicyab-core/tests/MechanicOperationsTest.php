@@ -55,4 +55,7 @@ final class OperationsSupportingRepository implements MechanicSupportingReposito
     public function findVerification(int $verificationId): ?array { return $this->verifications[$verificationId] ?? null; }
     public function updateVerification(int $verificationId, string $status, int $reviewedBy): bool { $this->verifications[$verificationId]['status'] = $status; $this->verifications[$verificationId]['reviewed_by'] = $reviewedBy; return true; }
     public function saveGalleryItem(int $mechanicId, array $record): int { return 1; }
+    public function saveProfileCollection(string $collection, int $mechanicId, array $record): int { return 1; }
+    public function listProfileCollection(string $collection, int $mechanicId): array { return []; }
+    public function deleteProfileCollection(string $collection, int $mechanicId, int $recordId): bool { return true; }
 }
