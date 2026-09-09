@@ -43,6 +43,8 @@ require_once dirname(__DIR__) . '/src/Core/AiSafetyGuard.php';
 require_once dirname(__DIR__) . '/src/Core/AiOrchestrator.php';
 require_once dirname(__DIR__) . '/src/Core/SeoService.php';
 require_once dirname(__DIR__) . '/src/Core/AuditService.php';
+require_once dirname(__DIR__) . '/src/Core/AuctionEligibility.php';
+require_once dirname(__DIR__) . '/src/Core/AnalyticsAggregationService.php';
 require_once dirname(__DIR__) . '/src/Contracts/SmsProvider.php';
 require_once dirname(__DIR__) . '/src/Contracts/UserDataRepository.php';
 require_once dirname(__DIR__) . '/src/Core/OtpService.php';

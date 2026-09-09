@@ -16,6 +16,8 @@ add_action('after_setup_theme', static function (): void {
 
 add_action('wp_enqueue_scripts', static function (): void {
     wp_enqueue_style('mechanicyab-theme', get_stylesheet_uri(), [], '0.2.0');
+    wp_enqueue_script('mechanicyab-app', get_template_directory_uri() . '/assets/app.js', [], '0.3.0', true);
+    wp_localize_script('mechanicyab-app', 'MechanicYab', ['api' => esc_url_raw(rest_url('mechanicyab/v1'))]);
 });
 
 function core_available(): bool

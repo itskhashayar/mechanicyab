@@ -14,6 +14,6 @@ $query = isset($_GET['q']) ? sanitize_text_field(wp_unslash((string) $_GET['q'])
       <button class="button" type="submit">جستجو</button>
     </form>
   </section>
-  <section class="card" aria-live="polite"><h2>نتایج جستجو</h2><p class="muted">نتایج از Search API بارگذاری می‌شوند.</p></section>
+  <section class="grid" data-search-results aria-live="polite"><h2>نتایج جستجو</h2><p class="muted">در حال بارگذاری نتایج…</p></section>
 </main>
 <?php get_footer(); ?>
