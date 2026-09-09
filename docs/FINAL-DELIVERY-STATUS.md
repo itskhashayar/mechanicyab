@@ -12,7 +12,7 @@ This document records the final repository-level validation performed for the cu
 | PHPStan | PASS | WordPress-aware configuration, no errors |
 | Core/plugin syntax | PASS | PHP lint over `src`, `tests`, and plugin bootstrap |
 | PHPUnit | PASS | 54 tests, 106 assertions |
-| GitHub Actions | PASS for latest available runs | Foundation workflow runs reported successful for pushed commits through the latest observed CI history |
+| GitHub Actions | PASS for Release Candidate commit | Run `34350465412` for commit `9f56f18` completed successfully; Composer, syntax, PHPStan, and PHPUnit steps passed |
 | Working tree | PASS | Clean and synchronized with `origin/feature/stage-1-foundation` |
 | WordPress runtime | Not Verified | No live WordPress installation was available in this sandbox |
 | MySQL migration execution | Not Verified | No live WordPress/MySQL staging evidence was available |
@@ -29,8 +29,8 @@ The installable project is structured as a WordPress plugin and theme under `plu
 
 ## Release Position
 
-The repository is **repository-validated and ready for staging installation**, but it is not claimed to be Runtime Verified or Production Ready until WordPress/MySQL, browser, provider, security, performance, backup, and deployment checks have real evidence.
+The repository is **repository-validated and ready for staging installation**, but it is not claimed to be Runtime Verified or Production Ready until WordPress/MySQL, browser, provider, security, performance, backup, and deployment checks have real evidence. The Release Candidate audit and migration-reporting fix are documented in `RELEASE-CANDIDATE-AUDIT.md`.
 
 ## Git
 
-The final observed branch is `feature/stage-1-foundation`; the local branch is synchronized with `origin/feature/stage-1-foundation`, and the latest observed product commit is `832fac3`.
+The final observed branch is `feature/stage-1-foundation`; the local branch is synchronized with `origin/feature/stage-1-foundation`, and the latest observed Release Candidate commit is `9f56f18`.
