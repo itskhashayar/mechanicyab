@@ -17,13 +17,13 @@ final class SchemaManagerTest extends TestCase
         self::assertSame('custom_my_module_states', $tables['module_states']);
         self::assertSame('custom_my_locations', $tables['locations']);
         self::assertSame('custom_my_vehicle_trims', $tables['vehicle_trims']);
-        self::assertCount(38, $tables);
+        self::assertCount(41, $tables);
     }
 
     public function testPendingMigrationIsReportedWithoutWordPressRuntime(): void
     {
         $schema = new SchemaManager();
-        self::assertSame(['stage-2-core-schema-v1', 'stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6'], $schema->pendingMigrations());
+        self::assertSame(['stage-2-core-schema-v1', 'stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7'], $schema->pendingMigrations());
     }
 
     public function testWordPressIsCanonicalIdentityAndMyUsersIsOnlyAnExtension(): void

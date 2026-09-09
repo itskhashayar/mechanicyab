@@ -6,7 +6,7 @@ namespace MechanicYab\Core\Core;
 
 final class SchemaManager
 {
-    public const VERSION = 6;
+    public const VERSION = 7;
     private const OPTION = 'mechanicyab_schema_version';
     private const LOCK = 'mechanicyab_schema_migration_lock';
 
@@ -54,6 +54,9 @@ final class SchemaManager
             'vehicle_reminders' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                vehicle_id bigint(20) unsigned NOT NULL,\n                service_id bigint(20) unsigned NULL,\n                title varchar(255) NOT NULL,\n                description text NULL,\n                due_date date NULL,\n                due_mileage int unsigned NULL,\n                status varchar(30) NOT NULL DEFAULT 'active',\n                completed_at datetime NULL,\n                created_at datetime NOT NULL,\n                updated_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                KEY vehicle_status (vehicle_id, status),\n                KEY due_date (due_date)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
             'notifications' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                wp_user_id bigint(20) unsigned NOT NULL,\n                type varchar(80) NOT NULL,\n                title varchar(255) NOT NULL,\n                body text NOT NULL,\n                data longtext NULL,\n                read_at datetime NULL,\n                created_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                KEY user_read (wp_user_id, read_at),\n                KEY user_created (wp_user_id, created_at)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
             'notification_deliveries' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                notification_id bigint(20) unsigned NOT NULL,\n                channel varchar(30) NOT NULL,\n                status varchar(30) NOT NULL DEFAULT 'pending',\n                provider_reference varchar(255) NULL,\n                sent_at datetime NULL,\n                failed_at datetime NULL,\n                error_code varchar(100) NULL,\n                created_at datetime NOT NULL,\n                updated_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                UNIQUE KEY notification_channel (notification_id, channel),\n                KEY status (status)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+            'analytics_events' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                event_name varchar(120) NOT NULL,\n                cta_id varchar(80) NULL,\n                entity_type varchar(50) NULL,\n                entity_id bigint(20) unsigned NULL,\n                page_type varchar(100) NULL,\n                city_id bigint(20) unsigned NULL,\n                neighborhood_id bigint(20) unsigned NULL,\n                service_id bigint(20) unsigned NULL,\n                vehicle_model_id bigint(20) unsigned NULL,\n                session_hash char(64) NULL,\n                wp_user_id bigint(20) unsigned NULL,\n                device_type varchar(30) NULL,\n                outcome varchar(30) NULL,\n                occurred_at datetime NOT NULL,\n                dedupe_key char(64) NOT NULL,\n                created_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                UNIQUE KEY dedupe_key (dedupe_key),\n                KEY event_time (event_name, occurred_at),\n                KEY entity (entity_type, entity_id),\n                KEY user_time (wp_user_id, occurred_at)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+            'analytics_hourly_metrics' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                metric_key varchar(120) NOT NULL,\n                bucket_start datetime NOT NULL,\n                dimensions longtext NULL,\n                metric_value decimal(18,4) NOT NULL DEFAULT 0,\n                updated_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                UNIQUE KEY metric_bucket (metric_key, bucket_start),\n                KEY bucket_start (bucket_start)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+            'analytics_daily_metrics' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                metric_key varchar(120) NOT NULL,\n                bucket_date date NOT NULL,\n                dimensions longtext NULL,\n                metric_value decimal(18,4) NOT NULL DEFAULT 0,\n                updated_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                UNIQUE KEY metric_date (metric_key, bucket_date),\n                KEY bucket_date (bucket_date)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
         ];
     }
 
@@ -130,12 +133,13 @@ final class SchemaManager
     public function pendingMigrations(): array
     {
         return match (true) {
-            $this->currentVersion() < 1 => ['stage-2-core-schema-v1', 'stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6'],
-            $this->currentVersion() < 2 => ['stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6'],
-            $this->currentVersion() < 3 => ['stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6'],
-            $this->currentVersion() < 4 => ['stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6'],
-            $this->currentVersion() < 5 => ['stage-7-reviews-trust-v5', 'stage-8-auth-users-v6'],
-            $this->currentVersion() < 6 => ['stage-8-auth-users-v6'],
+            $this->currentVersion() < 1 => ['stage-2-core-schema-v1', 'stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7'],
+            $this->currentVersion() < 2 => ['stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7'],
+            $this->currentVersion() < 3 => ['stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7'],
+            $this->currentVersion() < 4 => ['stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7'],
+            $this->currentVersion() < 5 => ['stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7'],
+            $this->currentVersion() < 6 => ['stage-8-auth-users-v6', 'stage-9-analytics-v7'],
+            $this->currentVersion() < 7 => ['stage-9-analytics-v7'],
             default => [],
         };
     }
