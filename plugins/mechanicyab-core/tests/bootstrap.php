@@ -36,6 +36,8 @@ require_once dirname(__DIR__) . '/src/Contracts/AnalyticsRepository.php';
 require_once dirname(__DIR__) . '/src/Core/AnalyticsService.php';
 require_once dirname(__DIR__) . '/src/Contracts/PaymentGateway.php';
 require_once dirname(__DIR__) . '/src/Core/PaymentService.php';
+require_once dirname(__DIR__) . '/src/Contracts/LedgerRepository.php';
+require_once dirname(__DIR__) . '/src/Core/LedgerService.php';
 require_once dirname(__DIR__) . '/src/Contracts/SmsProvider.php';
 require_once dirname(__DIR__) . '/src/Contracts/UserDataRepository.php';
 require_once dirname(__DIR__) . '/src/Core/OtpService.php';

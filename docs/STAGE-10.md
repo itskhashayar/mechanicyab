@@ -6,7 +6,7 @@ Payment is isolated behind `PaymentGateway`; the application depends on the cont
 
 ## Implemented scope
 
-Schema version `8` adds payments, payment transactions and refunds. The local payment record owns the immutable order key, payer, amount, currency, gateway and idempotency key. The payment service refuses unauthenticated payers, rejects invalid amounts, prevents re-creating an existing order and verifies against the server-stored amount and gateway reference.
+Schema versions `8` and `9` add payments, payment transactions, refunds and immutable ledger entries. The local payment record owns the immutable order key, payer, amount, currency, gateway and idempotency key. The payment service refuses unauthenticated payers, rejects invalid amounts, prevents re-creating an existing order and verifies against the server-stored amount and gateway reference. Ledger postings require at least two entries with equal debit and credit totals and cannot be edited through the Ledger contract.
 
 The callback endpoint is intentionally untrusted. It only identifies the local payment and triggers server-side verification. Fulfillment/finalization occurs only after the gateway adapter reports verified success. Zibal result `100` and duplicate result `201` are handled as success/duplicate-safe outcomes. Zarinpal `100/101` and IDPay `100/101/200` are represented in their adapters.
 
@@ -16,7 +16,7 @@ Gateway credentials are read from environment configuration and never persisted 
 
 ## Verification
 
-Composer validation, PHP syntax checks and PHPUnit pass locally: 40 tests and 76 assertions. Provider sandbox calls, real callback behavior, MySQL transaction isolation and refund execution are `Not Verified` without staging and approved provider credentials. No `Runtime Verified` claim is made.
+Composer validation, PHP syntax checks and PHPUnit pass locally: 42 tests and 78 assertions. Provider sandbox calls, real callback behavior, MySQL transaction isolation and refund execution are `Not Verified` without staging and approved provider credentials. No `Runtime Verified` claim is made.
 
 ## Founder decisions recorded
 

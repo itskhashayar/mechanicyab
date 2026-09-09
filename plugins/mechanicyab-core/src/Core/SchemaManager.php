@@ -6,7 +6,7 @@ namespace MechanicYab\Core\Core;
 
 final class SchemaManager
 {
-    public const VERSION = 8;
+    public const VERSION = 9;
     private const OPTION = 'mechanicyab_schema_version';
     private const LOCK = 'mechanicyab_schema_migration_lock';
 
@@ -60,6 +60,7 @@ final class SchemaManager
             'payments' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                payer_user_id bigint(20) unsigned NOT NULL,\n                order_key varchar(100) NOT NULL,\n                subscription_id bigint(20) unsigned NULL,\n                advertisement_id bigint(20) unsigned NULL,\n                amount decimal(15,2) NOT NULL,\n                currency varchar(10) NOT NULL DEFAULT 'IRR',\n                gateway varchar(50) NOT NULL,\n                gateway_reference varchar(255) NULL,\n                status varchar(30) NOT NULL DEFAULT 'pending',\n                idempotency_key varchar(255) NOT NULL,\n                paid_at datetime NULL,\n                created_at datetime NOT NULL,\n                updated_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                UNIQUE KEY order_key (order_key),\n                UNIQUE KEY idempotency_key (idempotency_key),\n                KEY payer_status (payer_user_id, status),\n                KEY gateway_reference (gateway_reference)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
             'payment_transactions' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                payment_id bigint(20) unsigned NOT NULL,\n                gateway_transaction_id varchar(255) NULL,\n                gateway_status varchar(100) NULL,\n                raw_reference varchar(255) NULL,\n                verification_status varchar(30) NOT NULL DEFAULT 'pending',\n                verified_at datetime NULL,\n                response_payload longtext NULL,\n                created_at datetime NOT NULL,\n                updated_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                KEY payment_status (payment_id, verification_status),\n                KEY gateway_transaction (gateway_transaction_id)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
             'refunds' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                payment_id bigint(20) unsigned NOT NULL,\n                amount decimal(15,2) NOT NULL,\n                currency varchar(10) NOT NULL DEFAULT 'IRR',\n                reason varchar(255) NOT NULL,\n                status varchar(30) NOT NULL DEFAULT 'requested',\n                gateway_reference varchar(255) NULL,\n                processed_at datetime NULL,\n                created_at datetime NOT NULL,\n                updated_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                KEY payment_status (payment_id, status)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
+            'ledger_entries' => fn (string $table): string => "CREATE TABLE {$table} (\n                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n                payment_id bigint(20) unsigned NULL,\n                entry_key varchar(120) NOT NULL,\n                account_code varchar(80) NOT NULL,\n                direction varchar(10) NOT NULL,\n                amount decimal(15,2) NOT NULL,\n                currency varchar(10) NOT NULL DEFAULT 'IRR',\n                status varchar(30) NOT NULL DEFAULT 'posted',\n                metadata longtext NULL,\n                created_at datetime NOT NULL,\n                PRIMARY KEY (id),\n                UNIQUE KEY entry_key (entry_key),\n                KEY payment_account (payment_id, account_code),\n                KEY created_at (created_at)\n            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
         ];
     }
 
@@ -136,15 +137,17 @@ final class SchemaManager
     public function pendingMigrations(): array
     {
         return match (true) {
-            $this->currentVersion() < 1 => ['stage-2-core-schema-v1', 'stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8'],
-            $this->currentVersion() < 2 => ['stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8'],
-            $this->currentVersion() < 3 => ['stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8'],
-            $this->currentVersion() < 4 => ['stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8'],
-            $this->currentVersion() < 5 => ['stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8'],
-            $this->currentVersion() < 6 => ['stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8'],
+            $this->currentVersion() < 1 => ['stage-2-core-schema-v1', 'stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8', 'stage-10-ledger-v9'],
+            $this->currentVersion() < 2 => ['stage-3-reference-schema-v2', 'stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8', 'stage-10-ledger-v9'],
+            $this->currentVersion() < 3 => ['stage-4-mechanics-schema-v3', 'stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8', 'stage-10-ledger-v9'],
+            $this->currentVersion() < 4 => ['stage-4-mechanics-support-v4', 'stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8', 'stage-10-ledger-v9'],
+            $this->currentVersion() < 5 => ['stage-7-reviews-trust-v5', 'stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8', 'stage-10-ledger-v9'],
+            $this->currentVersion() < 6 => ['stage-8-auth-users-v6', 'stage-9-analytics-v7', 'stage-10-financial-v8', 'stage-10-ledger-v9'],
+            $this->currentVersion() < 7 => ['stage-9-analytics-v7', 'stage-10-financial-v8', 'stage-10-ledger-v9'],
+            $this->currentVersion() < 8 => ['stage-10-financial-v8', 'stage-10-ledger-v9'],
             $this->currentVersion() < 7 => ['stage-9-analytics-v7', 'stage-10-financial-v8'],
-            $this->currentVersion() < 7 => ['stage-9-analytics-v7', 'stage-10-financial-v8'],
-            $this->currentVersion() < 8 => ['stage-10-financial-v8'],
+            $this->currentVersion() < 8 => ['stage-10-financial-v8', 'stage-10-ledger-v9'],
+            $this->currentVersion() < 9 => ['stage-10-ledger-v9'],
             default => [],
         };
     }
