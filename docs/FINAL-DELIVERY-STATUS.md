@@ -31,6 +31,8 @@ The installable project is structured as a WordPress plugin and theme under `plu
 
 The repository is **repository-validated and ready for staging installation**, but it is not claimed to be Runtime Verified or Production Ready until WordPress/MySQL, browser, provider, security, performance, backup, and deployment checks have real evidence. The Release Candidate audit and migration-reporting fix are documented in `RELEASE-CANDIDATE-AUDIT.md`.
 
+The complete staging installation, configuration, migration, rollback, provider, backup, and load-verification procedure is documented in `STAGING-INSTALLATION-RUNBOOK.md`.
+
 ## Git
 
-The final observed branch is `feature/stage-1-foundation`; the local branch is synchronized with `origin/feature/stage-1-foundation`, and the latest observed Release Candidate commit is `9f56f18`.
+The final observed branch is `feature/stage-1-foundation`; the local branch is synchronized with `origin/feature/stage-1-foundation`, and the frozen Release Candidate source commit is `387eda2`. Documentation-only follow-up commits may update this report and the runbook without changing product scope.
