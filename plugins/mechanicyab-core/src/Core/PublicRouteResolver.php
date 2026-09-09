@@ -11,6 +11,7 @@ final class PublicRouteResolver
         'search' => 'search.php',
         'map' => 'map.php',
         'mechanic' => 'single-mechanic.php',
+        'account' => 'account.php',
     ];
 
     public function register(): void
@@ -18,6 +19,7 @@ final class PublicRouteResolver
         add_rewrite_rule('^search/?$', 'index.php?mechanicyab_route=search', 'top');
         add_rewrite_rule('^map/?$', 'index.php?mechanicyab_route=map', 'top');
         add_rewrite_rule('^mechanic/([^/]+)/?$', 'index.php?mechanicyab_route=mechanic&mechanicyab_slug=$matches[1]', 'top');
+        add_rewrite_rule('^account/?$', 'index.php?mechanicyab_route=account', 'top');
         add_filter('query_vars', [$this, 'queryVars']);
         add_filter('template_include', [$this, 'template']);
     }

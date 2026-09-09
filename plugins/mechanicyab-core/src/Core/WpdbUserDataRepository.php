@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace MechanicYab\Core\Core;
+
+use MechanicYab\Core\Contracts\UserDataRepository;
+
+final class WpdbUserDataRepository implements UserDataRepository
+{
+    public function __construct(private readonly object $wpdb) {}
+    public function addFavorite(int $userId, string $entityType, int $entityId): bool { return $this->wpdb->query($this->wpdb->prepare("INSERT IGNORE INTO {$this->table('favorites')} (wp_user_id, entity_type, entity_id, created_at) VALUES (%d, %s, %d, %s)", $userId, $entityType, $entityId, gmdate('Y-m-d H:i:s'))) !== false; }
+    public function removeFavorite(int $userId, string $entityType, int $entityId): bool { return $this->wpdb->query($this->wpdb->prepare("DELETE FROM {$this->table('favorites')} WHERE wp_user_id = %d AND entity_type = %s AND entity_id = %d", $userId, $entityType, $entityId)) !== false; }
+    public function favorites(int $userId): array { $rows = $this->wpdb->get_results($this->wpdb->prepare("SELECT entity_type, entity_id, created_at FROM {$this->table('favorites')} WHERE wp_user_id = %d ORDER BY created_at DESC", $userId), ARRAY_A); return is_array($rows) ? $rows : []; }
+    public function createVehicle(int $userId, array $data): int { $now = gmdate('Y-m-d H:i:s'); $payload = ['wp_user_id'=>$userId,'brand_id'=>(int)$data['brand_id'],'model_id'=>(int)$data['model_id'],'trim_id'=>isset($data['trim_id'])?(int)$data['trim_id']:null,'nickname'=>$data['nickname']??null,'manufacture_year'=>$data['manufacture_year']??null,'production_year'=>$data['production_year']??null,'current_mileage'=>$data['current_mileage']??null,'status'=>'active','is_primary'=>!empty($data['is_primary'])?1:0,'created_at'=>$now,'updated_at'=>$now]; if ($this->wpdb->insert($this->table('user_vehicles'), $payload) === false) { throw new \RuntimeException('Vehicle could not be created.'); } return (int)$this->wpdb->insert_id; }
+    public function createReminder(int $userId, array $data): int { $now = gmdate('Y-m-d H:i:s'); $payload = ['vehicle_id'=>(int)$data['vehicle_id'],'service_id'=>isset($data['service_id'])?(int)$data['service_id']:null,'title'=>sanitize_text_field((string)$data['title']),'description'=>isset($data['description'])?sanitize_textarea_field((string)$data['description']):null,'due_date'=>$data['due_date']??null,'due_mileage'=>$data['due_mileage']??null,'status'=>'active','created_at'=>$now,'updated_at'=>$now]; if ($this->wpdb->insert($this->table('vehicle_reminders'), $payload) === false) { throw new \RuntimeException('Reminder could not be created.'); } return (int)$this->wpdb->insert_id; }
+    public function notify(int $userId, string $type, string $title, string $body, array $data = []): int { $now = gmdate('Y-m-d H:i:s'); if ($this->wpdb->insert($this->table('notifications'), ['wp_user_id'=>$userId,'type'=>$type,'title'=>$title,'body'=>$body,'data'=>wp_json_encode($data),'created_at'=>$now]) === false) { throw new \RuntimeException('Notification could not be created.'); } return (int)$this->wpdb->insert_id; }
+    private function table(string $name): string { if (!isset($this->wpdb->prefix)) { throw new \RuntimeException('WordPress database prefix is unavailable.'); } return $this->wpdb->prefix . 'my_' . $name; }
+}

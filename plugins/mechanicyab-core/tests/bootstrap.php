@@ -32,4 +32,8 @@ require_once dirname(__DIR__) . '/src/Core/PublicRouteResolver.php';
 require_once dirname(__DIR__) . '/src/Contracts/ReviewRepository.php';
 require_once dirname(__DIR__) . '/src/Core/ReviewService.php';
 require_once dirname(__DIR__) . '/src/Core/ReviewPublicResource.php';
+require_once dirname(__DIR__) . '/src/Contracts/SmsProvider.php';
+require_once dirname(__DIR__) . '/src/Contracts/UserDataRepository.php';
+require_once dirname(__DIR__) . '/src/Core/OtpService.php';
+require_once dirname(__DIR__) . '/src/Core/UserAccountService.php';
 require_once dirname(__DIR__) . '/src/Modules/CoreModule.php';

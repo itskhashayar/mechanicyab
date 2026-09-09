@@ -19,10 +19,16 @@ use MechanicYab\Core\Core\MechanicService;
 use MechanicYab\Core\Core\ModuleRegistry;
 use MechanicYab\Core\Core\MysqlSearchProvider;
 use MechanicYab\Core\Core\OpenDirectionsAdapter;
+use MechanicYab\Core\Core\AuthService;
+use MechanicYab\Core\Core\KavenegarSmsProvider;
+use MechanicYab\Core\Core\OtpService;
 use MechanicYab\Core\Core\PublicRouteResolver;
 use MechanicYab\Core\Core\ReviewPublicResource;
 use MechanicYab\Core\Core\ReviewService;
 use MechanicYab\Core\Core\SearchService;
+use MechanicYab\Core\Core\WpdbOtpChallengeRepository;
+use MechanicYab\Core\Core\UserAccountService;
+use MechanicYab\Core\Core\WpdbUserDataRepository;
 use MechanicYab\Core\Core\SchemaManager;
 use MechanicYab\Core\Modules\CoreModule;
 use MechanicYab\Core\Modules\SearchModule;
@@ -197,6 +203,35 @@ final class Plugin
                 }
             },
         ]);
+        register_rest_route(API_NAMESPACE, '/auth/otp/request', [
+            'methods' => 'POST',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $provider = new KavenegarSmsProvider((string) getenv('MECHANICYAB_KAVENEGAR_API_KEY'), (string) getenv('MECHANICYAB_KAVENEGAR_TEMPLATE'));
+                    $id = (new AuthService(new OtpService(new WpdbOtpChallengeRepository($GLOBALS['wpdb']), $provider)))->requestOtp((string) ($request->get_json_params()['mobile'] ?? ''));
+                    return new \WP_REST_Response((new Response(true, ['challenge_id' => $id]))->toArray(), 202);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'otp_request_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/auth/otp/verify', [
+            'methods' => 'POST',
+            'permission_callback' => '__return_true',
+            'callback' => function (\WP_REST_Request $request): \WP_REST_Response {
+                try {
+                    $payload = (array) $request->get_json_params();
+                    $provider = new KavenegarSmsProvider((string) getenv('MECHANICYAB_KAVENEGAR_API_KEY'), (string) getenv('MECHANICYAB_KAVENEGAR_TEMPLATE'));
+                    $id = (new AuthService(new OtpService(new WpdbOtpChallengeRepository($GLOBALS['wpdb']), $provider)))->verifyOtp((string) ($payload['mobile'] ?? ''), (string) ($payload['code'] ?? ''));
+                    return new \WP_REST_Response((new Response(true, ['user_id' => $id]))->toArray(), 200);
+                } catch (\Throwable) { return new \WP_REST_Response((new Response(false, null, [], [['code' => 'otp_verify_failed']]))->toArray(), 422); }
+            },
+        ]);
+        register_rest_route(API_NAMESPACE, '/auth/logout', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (): \WP_REST_Response { (new AuthService(new OtpService(new WpdbOtpChallengeRepository($GLOBALS['wpdb']), new KavenegarSmsProvider('', ''))))->logout(); return new \WP_REST_Response((new Response(true, ['logged_out' => true]))->toArray(), 200); }]);
+        register_rest_route(API_NAMESPACE, '/account/favorites', ['methods' => 'GET', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => fn (): \WP_REST_Response => new \WP_REST_Response((new Response(true, (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->favorites((int) get_current_user_id())))->toArray(), 200)]);
+        register_rest_route(API_NAMESPACE, '/account/favorites', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $p = (array) $request->get_json_params(); $ok = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->addFavorite((int) get_current_user_id(), (string) ($p['entity_type'] ?? ''), (int) ($p['entity_id'] ?? 0)); return new \WP_REST_Response((new Response(true, ['saved' => $ok]))->toArray(), 201); }]);
+        register_rest_route(API_NAMESPACE, '/account/favorites', ['methods' => 'DELETE', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $p = (array) $request->get_json_params(); $ok = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->removeFavorite((int) get_current_user_id(), (string) ($p['entity_type'] ?? ''), (int) ($p['entity_id'] ?? 0)); return new \WP_REST_Response((new Response(true, ['removed' => $ok]))->toArray(), 200); }]);
+        register_rest_route(API_NAMESPACE, '/account/vehicles', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $id = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->createVehicle((int) get_current_user_id(), (array) $request->get_json_params()); return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201); }]);
+        register_rest_route(API_NAMESPACE, '/account/reminders', ['methods' => 'POST', 'permission_callback' => static fn (): bool => is_user_logged_in(), 'callback' => function (\WP_REST_Request $request): \WP_REST_Response { $id = (new UserAccountService(new WpdbUserDataRepository($GLOBALS['wpdb'])))->createReminder((int) get_current_user_id(), (array) $request->get_json_params()); return new \WP_REST_Response((new Response(true, ['id' => $id]))->toArray(), 201); }]);
     }
 
     public function registerAdminMenu(): void

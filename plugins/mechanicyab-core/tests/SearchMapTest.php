@@ -60,7 +60,7 @@ final class SearchMapTest extends TestCase
 
     public function testPublicRoutesStayInCoreResolverBoundary(): void
     {
-        self::assertSame(['search.php', 'map.php', 'single-mechanic.php'], array_values((new PublicRouteResolver())->supportedRoutes()));
+        self::assertSame(['search.php', 'map.php', 'single-mechanic.php', 'account.php'], array_values((new PublicRouteResolver())->supportedRoutes()));
     }
 }
 
